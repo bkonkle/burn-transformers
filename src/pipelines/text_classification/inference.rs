@@ -1,36 +1,42 @@
 use burn::{
     config::Config as _,
     data::{dataloader::batcher::Batcher as BatcherTrait, dataset::Dataset},
-    module::Module,
     record::{CompactRecorder, Recorder},
-    tensor::{backend::Backend, Tensor},
+    tensor::{backend::AutodiffBackend, Tensor},
 };
 use std::sync::Arc;
 use tokenizers::Tokenizer;
 
 use crate::datasets::snips;
 
-use super::Batcher;
+use super::{
+    pipeline::{Model, ModelConfig},
+    Batcher,
+};
 
 /// Define inference function
-pub fn infer<B: Backend, D: Dataset<snips::Item> + 'static>(
+pub fn infer<B: AutodiffBackend, M: Model<B> + 'static, D: Dataset<snips::Item> + 'static>(
     device: B::Device, // Device on which to perform computation (e.g., CPU or CUDA device)
+    model_name: &str,  // The name of the model (e.g., "bert-base-uncased")
     artifact_dir: &str, // Directory containing model and config files
     samples: Vec<String>, // Text samples for inference
-) -> anyhow::Result<(Tensor<B, 2>, Config)> {
+) -> anyhow::Result<(Tensor<B, 2>, M::Config)>
+where
+    i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+{
     // Load experiment configuration
-    let mut config = Config::load(format!("{artifact_dir}/config.json").as_str())
+    let mut config = M::Config::load(format!("{artifact_dir}/config.json").as_str())
         .map_err(|e| anyhow!("Unable to load config file: {}", e))?;
 
-    config.model.hidden_dropout_prob = 0.0;
+    config.set_hidden_dropout_prob(0.0);
 
     // Initialize tokenizer
-    let tokenizer = Tokenizer::from_pretrained(MODEL_NAME, None).unwrap();
+    let tokenizer = Tokenizer::from_pretrained(model_name, None).unwrap();
 
     // Initialize batcher for batching samples
     let batcher = Arc::new(Batcher::<B>::new(
         tokenizer.clone(),
-        &config,
+        config.clone(),
         device.clone(),
     ));
 
@@ -44,7 +50,7 @@ pub fn infer<B: Backend, D: Dataset<snips::Item> + 'static>(
     // Create model using loaded weights
     println!("Creating model...");
 
-    let model = config.init(&device).load_record(record);
+    let model = config.init::<B, M>(&device).load_record(record);
 
     // Run inference on the given text samples
     println!("Running inference...");

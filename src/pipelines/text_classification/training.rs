@@ -1,12 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use bert_burn::{
-    loader::{
-        load_embeddings_from_safetensors, load_encoder_from_safetensors,
-        load_pooler_from_safetensors,
-    },
-    model::{BertModelConfig, BertModelRecord},
-};
 use burn::{
     config::Config as _,
     data::{
@@ -14,27 +7,28 @@ use burn::{
         dataset::{transform::SamplerDataset, Dataset},
     },
     lr_scheduler::noam::NoamLrSchedulerConfig,
-    module::{ConstantRecord, Module},
-    nn::{LinearConfig, LinearRecord},
     optim::AdamWConfig,
     record::{CompactRecorder, Recorder},
-    tensor::backend::{AutodiffBackend, Backend},
+    tensor::backend::AutodiffBackend,
     train::{
         metric::{AccuracyMetric, CudaMetric, LearningRateMetric, LossMetric},
-        LearnerBuilder,
+        ClassificationOutput, LearnerBuilder, ValidStep,
     },
     LearningRate,
 };
-use candle_core::{safetensors, Device};
 use tokenizers::Tokenizer;
 use tokio::{
     fs::File,
     io::{self, AsyncBufReadExt, Lines},
 };
 
-use crate::{datasets::snips, models::bert::sequence_classification::ModelRecord};
+use crate::datasets::snips;
 
-use super::{pipeline::PreTrainedModelConfig, Batcher};
+use super::{
+    batcher::Train,
+    pipeline::{Model, ModelConfig},
+    Batcher,
+};
 
 /// Define configuration struct for the experiment
 #[derive(burn::config::Config)]
@@ -63,6 +57,7 @@ pub struct Config {
     #[config(default = 0.1)]
     pub hidden_dropout_prob: f64,
 
+    /// Model name (e.g., "bert-base-uncased")
     #[config(default = "\"bert-base-uncased\".to_string()")]
     pub model_name: String,
 
@@ -103,7 +98,7 @@ async fn read_file(path: &str) -> io::Result<Vec<String>> {
 }
 
 /// Define train function
-pub async fn train<B: AutodiffBackend, D: Dataset<snips::Item> + 'static>(
+pub async fn train<B: AutodiffBackend, M: Model<B> + 'static, D: Dataset<snips::Item> + 'static>(
     devices: Vec<B::Device>, // Device on which to perform computation (e.g., CPU or CUDA device)
     dataset_train: D,        // Training dataset
     dataset_test: D,         // Testing dataset
@@ -112,19 +107,19 @@ pub async fn train<B: AutodiffBackend, D: Dataset<snips::Item> + 'static>(
 ) -> anyhow::Result<()>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+    M::InnerModule: ValidStep<
+        Train<<B as AutodiffBackend>::InnerBackend>,
+        ClassificationOutput<<B as AutodiffBackend>::InnerBackend>,
+    >,
 {
     let device = &devices[0];
 
     let (config_file, model_file) = download_hf_model(&config.model_name).await;
 
-    let mut pretrained_config = PreTrainedModelConfig::load(config_file)
+    let model_config = M::Config::load_pretrained(config_file, 512, config.hidden_dropout_prob)
         .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
 
-    pretrained_config.set_max_seq_len(Some(512));
-    pretrained_config.set_hidden_dropout_prob(config.hidden_dropout_prob);
-
-    let model_config = pretrained_config.to_model_config();
-    let n_classes = pretrained_config.id2label().len();
+    let n_classes = model_config.id2label().len();
 
     if n_classes == 0 {
         return Err(anyhow::anyhow!(
@@ -132,24 +127,32 @@ where
         ));
     }
 
-    // Initialize the linear output
-    let output = LinearConfig::new(model_config.model.hidden_size, n_classes).init(device);
+    let model = M::load_from_safetensors(device, model_file, model_config.clone());
 
-    let model = model_config.init(device).load_record(ModelRecord {
-        model: from_safetensors(model_file, device, pretrained_config),
-        output: LinearRecord {
-            weight: output.weight,
-            bias: output.bias,
-        },
-        n_classes: ConstantRecord::new(),
-    });
+    // TODO: Move this logic to a trait implementation
+    // Initialize the linear output
+    // let output = LinearConfig::new(model_config.hidden_size(), n_classes).init(device);
+
+    // let temp = model_config.init(device);
+
+    // let model_record: M::Record = ModelRecord {
+    //     model: from_safetensors(model_file, device, model_config),
+    //     output: LinearRecord {
+    //         weight: output.weight,
+    //         bias: output.bias,
+    //     },
+    //     n_classes: ConstantRecord::new(),
+    // };
+
+    // let model = temp.load_record(model_record);
 
     // Initialize tokenizer
     let tokenizer = Tokenizer::from_pretrained(&config.model_name, None).unwrap();
 
     // Initialize batchers for training and testing data
-    let batcher_train = Batcher::<B>::new(tokenizer.clone(), &model_config, device.clone());
-    let batcher_test = Batcher::<B::InnerBackend>::new(tokenizer, &model_config, device.clone());
+    let batcher_train = Batcher::<B>::new(tokenizer.clone(), model_config.clone(), device.clone());
+    let batcher_test =
+        Batcher::<B::InnerBackend>::new(tokenizer, model_config.clone(), device.clone());
 
     // Initialize data loaders for training and testing data
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
@@ -168,7 +171,7 @@ where
     // Initialize learning rate scheduler
     let lr_scheduler = NoamLrSchedulerConfig::new(config.learning_rate)
         .with_warmup_steps(0)
-        .with_model_size(model_config.model.hidden_size)
+        .with_model_size(model_config.hidden_size())
         .init();
 
     // Initialize learner
@@ -225,55 +228,4 @@ async fn download_hf_model(model_name: &str) -> (PathBuf, PathBuf) {
     });
 
     (config_filepath, model_filepath)
-}
-
-fn from_safetensors<B: Backend>(
-    file_path: PathBuf,
-    device: &B::Device,
-    config: BertModelConfig,
-) -> BertModelRecord<B> {
-    let model_name = config.model_type.as_str();
-    let weight_result = safetensors::load::<PathBuf>(
-        file_path,
-        &Device::cuda_if_available(0).expect("Unable to resolve Device"),
-    );
-
-    // Match on the result of loading the weights
-    let weights = match weight_result {
-        Ok(weights) => weights,
-        Err(e) => panic!("Error loading weights: {:?}", e),
-    };
-
-    // Weights are stored in a HashMap<String, Tensor>
-    // For each layer, it will either be prefixed with "encoder.layer." or "embeddings."
-    // We need to extract both.
-    let mut encoder_layers: HashMap<String, candle_core::Tensor> = HashMap::new();
-    let mut embeddings_layers: HashMap<String, candle_core::Tensor> = HashMap::new();
-    let mut pooler_layers: HashMap<String, candle_core::Tensor> = HashMap::new();
-
-    for (key, value) in weights.iter() {
-        // If model name prefix present in keys, remove it to load keys consistently
-        // across variants (bert-base, roberta-base etc.)
-
-        let prefix = format!("{}.", model_name);
-        let key_without_prefix = key.replace(&prefix, "");
-
-        if key_without_prefix.starts_with("encoder.layer.") {
-            encoder_layers.insert(key_without_prefix, value.clone());
-        } else if key_without_prefix.starts_with("embeddings.") {
-            embeddings_layers.insert(key_without_prefix, value.clone());
-        } else if key_without_prefix.starts_with("pooler.") {
-            pooler_layers.insert(key_without_prefix, value.clone());
-        }
-    }
-
-    let embeddings_record = load_embeddings_from_safetensors(embeddings_layers, device);
-    let encoder_record = load_encoder_from_safetensors(encoder_layers, device);
-    let pooler_record = load_pooler_from_safetensors(pooler_layers, device);
-
-    BertModelRecord {
-        embeddings: embeddings_record,
-        encoder: encoder_record,
-        pooler: Some(pooler_record),
-    }
 }

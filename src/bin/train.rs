@@ -4,7 +4,8 @@ use anyhow::{anyhow, Result};
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
     datasets::snips,
-    models::bert::sequence_classification::training::{self, Config},
+    models::{self, bert::sequence_classification},
+    pipelines::text_classification::training::{self, Config},
 };
 use pico_args::Arguments;
 
@@ -110,7 +111,12 @@ async fn main() -> Result<()> {
 
     let device = LibTorchDevice::Cuda(0);
 
-    training::train::<Autodiff<LibTorch>, snips::Dataset>(
+    // TODO: Make this more generic
+    training::train::<
+        Autodiff<LibTorch>,
+        sequence_classification::Model<Autodiff<LibTorch>>,
+        snips::Dataset,
+    >(
         vec![device],
         snips::Dataset::train().await?,
         snips::Dataset::test().await?,

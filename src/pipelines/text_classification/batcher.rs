@@ -57,19 +57,19 @@ pub struct Batcher<B: Backend> {
 
 impl<B: Backend> Batcher<B> {
     /// Creates a new batcher
-    pub fn new(tokenizer: Tokenizer, config: Box<dyn ModelConfig>, device: B::Device) -> Self {
-        let class_map = config.get_reverse_class_map();
+    pub fn new<C: ModelConfig>(tokenizer: Tokenizer, config: C, device: B::Device) -> Self {
+        let class_map = config.label2id();
 
         let unk_token_id = class_map
             .get("UNK")
-            .unwrap_or(&(config.model.pad_token_id + 1))
+            .unwrap_or(&(config.pad_token_id() + 1))
             .to_owned();
 
         Self {
             tokenizer,
-            pad_token_id: config.model.pad_token_id,
+            pad_token_id: config.pad_token_id(),
             unk_token_id,
-            max_seq_length: config.model.max_position_embeddings,
+            max_seq_length: config.max_position_embeddings(),
             class_map,
             device,
         }

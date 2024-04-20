@@ -2,7 +2,11 @@
 
 use anyhow::{anyhow, Result};
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
-use burn_transformers::{datasets::snips, models::bert::sequence_classification::infer};
+use burn_transformers::{
+    datasets::snips,
+    models::bert::sequence_classification::{self, MODEL_NAME},
+    pipelines::text_classification::infer,
+};
 use pico_args::Arguments;
 
 const HELP: &str = "\
@@ -99,8 +103,12 @@ async fn main() -> Result<()> {
     let input: Vec<String> = samples.iter().map(|(s, _)| (*s).to_string()).collect();
 
     // Get model predictions
-    let (predictions, config) =
-        infer::<Autodiff<LibTorch>, snips::Dataset>(device, &artifact_dir, input)?;
+    // TODO: Make this more generic
+    let (predictions, config) = infer::<
+        Autodiff<LibTorch>,
+        sequence_classification::Model<Autodiff<LibTorch>>,
+        snips::Dataset,
+    >(device, MODEL_NAME, &artifact_dir, input)?;
 
     // Print out predictions for each sample
     for (i, (text, expected)) in samples.into_iter().enumerate() {
