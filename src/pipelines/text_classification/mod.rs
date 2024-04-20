@@ -1,5 +1,5 @@
-/// Model
-pub mod model;
+/// The Text Classification Pipeline
+pub mod pipeline;
 
 /// Batcher
 pub mod batcher;
@@ -12,5 +12,4 @@ pub mod inference;
 
 pub use batcher::Batcher;
 pub use inference::infer;
-pub use model::{Model, ModelRecord};
 pub use training::train;

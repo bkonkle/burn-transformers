@@ -10,10 +10,7 @@ use tokenizers::Tokenizer;
 
 use crate::datasets::snips;
 
-use super::{
-    model::{Config, MODEL_NAME},
-    Batcher,
-};
+use super::Batcher;
 
 /// Define inference function
 pub fn infer<B: Backend, D: Dataset<snips::Item> + 'static>(

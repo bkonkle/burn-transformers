@@ -18,10 +18,18 @@ use burn::{
 };
 use derive_new::new;
 
-use super::batcher;
-
 /// The Bert model name on Hugging Face
 pub const MODEL_NAME: &str = "bert-base-uncased";
+
+/// A training batch for text classification
+#[derive(Clone, Debug, new)]
+pub struct Train<B: Backend> {
+    /// Bert Model input
+    pub input: BertInferenceBatch<B>,
+
+    /// Class ids for the batch
+    pub targets: Tensor<B, 1, Int>,
+}
 
 /// BERT for text Classification
 #[derive(Module, Debug, new)]
@@ -39,7 +47,7 @@ pub struct Model<B: Backend> {
 /// Define model behavior
 impl<B: Backend> Model<B> {
     /// Defines forward pass for training
-    pub fn forward(&self, item: batcher::Train<B>) -> ClassificationOutput<B>
+    pub fn forward(&self, item: Train<B>) -> ClassificationOutput<B>
     where
         i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
     {
@@ -89,16 +97,6 @@ impl<B: Backend> Model<B> {
     }
 }
 
-/// Model input
-#[derive(new)]
-pub struct Input<B: Backend> {
-    /// Outputs
-    pub outputs: Tensor<B, 2>,
-
-    /// Targets
-    pub targets: Tensor<B, 1, Int>,
-}
-
 /// The Model Configuration
 #[derive(burn::config::Config)]
 pub struct Config {
@@ -111,7 +109,7 @@ pub struct Config {
 
 impl Config {
     /// Initializes a Bert model with default weights
-    pub fn init<B: Backend>(&self, device: &B::Device) -> super::Model<B> {
+    pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
         let model = self.model.init(device, true);
 
         let n_classes = self.id2label.len();
@@ -140,11 +138,11 @@ impl Config {
 }
 
 /// Define training step
-impl<B: AutodiffBackend> TrainStep<batcher::Train<B>, ClassificationOutput<B>> for Model<B>
+impl<B: AutodiffBackend> TrainStep<Train<B>, ClassificationOutput<B>> for Model<B>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
-    fn step(&self, item: batcher::Train<B>) -> TrainOutput<ClassificationOutput<B>> {
+    fn step(&self, item: Train<B>) -> TrainOutput<ClassificationOutput<B>> {
         // Run forward pass, calculate gradients and return them along with the output
         let output = self.forward(item);
         let grads = output.loss.backward();
@@ -154,11 +152,11 @@ where
 }
 
 /// Define validation step
-impl<B: Backend> ValidStep<batcher::Train<B>, ClassificationOutput<B>> for Model<B>
+impl<B: Backend> ValidStep<Train<B>, ClassificationOutput<B>> for Model<B>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
-    fn step(&self, item: batcher::Train<B>) -> ClassificationOutput<B> {
+    fn step(&self, item: Train<B>) -> ClassificationOutput<B> {
         // Run forward pass and return the output
         self.forward(item)
     }

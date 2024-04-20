@@ -32,12 +32,9 @@ use tokio::{
     io::{self, AsyncBufReadExt, Lines},
 };
 
-use crate::datasets::snips;
+use crate::{datasets::snips, models::bert::sequence_classification::ModelRecord};
 
-use super::{
-    model::{self, MODEL_NAME},
-    Batcher, ModelRecord,
-};
+use super::{pipeline::PreTrainedModelConfig, Batcher};
 
 /// Define configuration struct for the experiment
 #[derive(burn::config::Config)]
@@ -66,6 +63,9 @@ pub struct Config {
     #[config(default = 0.1)]
     pub hidden_dropout_prob: f64,
 
+    #[config(default = "\"bert-base-uncased\".to_string()")]
+    pub model_name: String,
+
     /// A map from class ids to class names
     pub id2label: HashMap<usize, String>,
 }
@@ -73,6 +73,7 @@ pub struct Config {
 impl Config {
     /// Load configuration from file for training a particular task
     pub async fn new_for_task(task_root: &str) -> io::Result<Self> {
+        // TODO: Make this generic
         let id2label = read_file(&format!("{}/intent_labels.txt", task_root))
             .await?
             .into_iter()
@@ -114,17 +115,16 @@ where
 {
     let device = &devices[0];
 
-    let (config_file, model_file) = download_hf_model(MODEL_NAME).await;
+    let (config_file, model_file) = download_hf_model(&config.model_name).await;
 
-    let mut bert_config = BertModelConfig::load(config_file)
-        .map_err(|e| anyhow!("Unable to load Hugging Face Config file: {}", e))?;
+    let mut pretrained_config = PreTrainedModelConfig::load(config_file)
+        .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
 
-    bert_config.max_seq_len = Some(512);
-    bert_config.hidden_dropout_prob = config.hidden_dropout_prob;
+    pretrained_config.set_max_seq_len(Some(512));
+    pretrained_config.set_hidden_dropout_prob(config.hidden_dropout_prob);
 
-    let model_config = model::Config::new(bert_config.clone(), config.id2label);
-
-    let n_classes = model_config.id2label.len();
+    let model_config = pretrained_config.to_model_config();
+    let n_classes = pretrained_config.id2label().len();
 
     if n_classes == 0 {
         return Err(anyhow::anyhow!(
@@ -136,7 +136,7 @@ where
     let output = LinearConfig::new(model_config.model.hidden_size, n_classes).init(device);
 
     let model = model_config.init(device).load_record(ModelRecord {
-        model: from_safetensors(model_file, device, bert_config),
+        model: from_safetensors(model_file, device, pretrained_config),
         output: LinearRecord {
             weight: output.weight,
             bias: output.bias,
@@ -145,7 +145,7 @@ where
     });
 
     // Initialize tokenizer
-    let tokenizer = Tokenizer::from_pretrained(MODEL_NAME, None).unwrap();
+    let tokenizer = Tokenizer::from_pretrained(&config.model_name, None).unwrap();
 
     // Initialize batchers for training and testing data
     let batcher_train = Batcher::<B>::new(tokenizer.clone(), &model_config, device.clone());
