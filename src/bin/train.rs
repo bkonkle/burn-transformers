@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
     datasets::snips,
-    models::{self, bert::sequence_classification},
+    models::bert::sequence_classification,
     pipelines::text_classification::training::{self, Config},
 };
 use pico_args::Arguments;
@@ -21,6 +21,7 @@ Options:
   -m, --model          The model to use (e.g., 'bert')
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
+  -d, --data-dir       The path to the top-level data directory (defaults to 'data')
 ";
 
 #[derive(Debug)]
@@ -28,13 +29,13 @@ struct Args {
     /// Prints the usage menu
     help: bool,
 
-    /// The pipeline to use
+    /// The pipeline to use (e.g., 'text-classification')
     pipeline: String,
 
-    /// The dataset to use
+    /// The dataset to use (e.g., 'snips')
     dataset: String,
 
-    /// The model to use
+    /// The model to use (e.g., 'bert')
     model: Option<String>,
 
     /// Number of epochs to train for
@@ -42,6 +43,9 @@ struct Args {
 
     /// Batch size
     batch_size: Option<usize>,
+
+    /// The path to the top-level data directory (defaults to 'data')
+    data_dir: Option<String>,
 }
 
 fn parse_args() -> Result<Args, pico_args::Error> {
@@ -63,6 +67,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
         model: pargs.opt_value_from_str(["-m", "--model"])?,
         num_epochs: pargs.opt_value_from_str(["-n", "--num-epochs"])?,
         batch_size: pargs.opt_value_from_str(["-b", "--batch-size"])?,
+        data_dir: pargs.opt_value_from_str(["-d", "--data-dir"])?,
     };
 
     Ok(args)
@@ -88,18 +93,17 @@ async fn main() -> Result<()> {
     }
 
     // TODO: Come up with a better mechanism for this as models expand
-    let model = args.model.map_or(Ok("bert".to_string()), |model| {
-        if model != "bert" {
-            return Err(anyhow!("Unsupported model: {}", model));
-        }
+    let model = args
+        .model
+        .map_or(Ok("bert-base-uncased".to_string()), |model| {
+            if model != "bert-base-uncased" {
+                return Err(anyhow!("Unsupported model: {}", model));
+            }
 
-        Ok(model)
-    })?;
+            Ok(model)
+        })?;
 
-    let dataset_root = format!("data/datasets/{}", args.dataset);
-    let artifact_dir = format!("data/pipelines/{}/{}", args.pipeline, model);
-
-    let mut config = Config::new_for_task(&dataset_root).await?;
+    let mut config = Config::new(model, args.dataset.clone());
 
     if let Some(num_epochs) = args.num_epochs {
         config.num_epochs = num_epochs;
@@ -107,6 +111,10 @@ async fn main() -> Result<()> {
 
     if let Some(batch_size) = args.batch_size {
         config.batch_size = batch_size;
+    }
+
+    if let Some(data_dir) = args.data_dir {
+        config.data_dir = data_dir;
     }
 
     let device = LibTorchDevice::Cuda(0);
@@ -121,7 +129,6 @@ async fn main() -> Result<()> {
         snips::Dataset::train().await?,
         snips::Dataset::test().await?,
         config,
-        &artifact_dir,
     )
     .await?;
 

@@ -1,5 +1,3 @@
-use std::{collections::HashMap, path::PathBuf};
-
 use burn::{
     config::Config as _,
     data::{
@@ -17,26 +15,17 @@ use burn::{
     LearningRate,
 };
 use tokenizers::Tokenizer;
-use tokio::{
-    fs::File,
-    io::{self, AsyncBufReadExt, Lines},
-};
 
-use crate::datasets::snips;
+use crate::{datasets::snips, utils::hugging_face::download_hf_model};
 
 use super::{
     batcher::Train,
-    pipeline::{Model, ModelConfig},
-    Batcher,
+    Batcher, {Model, ModelConfig},
 };
 
 /// Define configuration struct for the experiment
 #[derive(burn::config::Config)]
 pub struct Config {
-    /// Maximum sequence length
-    #[config(default = 50)]
-    pub max_seq_length: usize,
-
     /// Batch size
     #[config(default = 2)]
     pub batch_size: usize,
@@ -57,44 +46,15 @@ pub struct Config {
     #[config(default = 0.1)]
     pub hidden_dropout_prob: f64,
 
+    /// The location of the top-level data directory
+    #[config(default = "\"data\".to_string()")]
+    pub data_dir: String,
+
     /// Model name (e.g., "bert-base-uncased")
-    #[config(default = "\"bert-base-uncased\".to_string()")]
     pub model_name: String,
 
-    /// A map from class ids to class names
-    pub id2label: HashMap<usize, String>,
-}
-
-impl Config {
-    /// Load configuration from file for training a particular task
-    pub async fn new_for_task(task_root: &str) -> io::Result<Self> {
-        // TODO: Make this generic
-        let id2label = read_file(&format!("{}/intent_labels.txt", task_root))
-            .await?
-            .into_iter()
-            .enumerate()
-            .map(|(i, s)| (i, s.trim().to_string()))
-            .collect::<HashMap<_, _>>();
-
-        Ok(Config::new(id2label))
-    }
-}
-
-async fn file_reader(path: &str) -> io::Result<Lines<io::BufReader<File>>> {
-    let f = File::open(path).await?;
-
-    Ok(io::BufReader::new(f).lines())
-}
-
-async fn read_file(path: &str) -> io::Result<Vec<String>> {
-    let mut r = file_reader(path).await?;
-    let mut lines = Vec::new();
-
-    while let Some(line) = r.next_line().await? {
-        lines.push(line);
-    }
-
-    Ok(lines)
+    /// The Dataset to use (e.g., "snips")
+    pub dataset_name: String,
 }
 
 /// Define train function
@@ -103,7 +63,6 @@ pub async fn train<B: AutodiffBackend, M: Model<B> + 'static, D: Dataset<snips::
     dataset_train: D,        // Training dataset
     dataset_test: D,         // Testing dataset
     config: Config,          // Experiment configuration
-    artifact_dir: &str,      // Directory to save model and config files
 ) -> anyhow::Result<()>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
@@ -116,35 +75,15 @@ where
 
     let (config_file, model_file) = download_hf_model(&config.model_name).await;
 
-    let model_config = M::Config::load_pretrained(config_file, 512, config.hidden_dropout_prob)
+    let dataset_dir = format!("{}/datasets/{}", config.data_dir, config.dataset_name);
+
+    let model_config = M::Config::load_pretrained(config_file, &dataset_dir)
+        .await
         .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
 
-    let n_classes = model_config.id2label().len();
+    let pipeline_config = model_config.get_config();
 
-    if n_classes == 0 {
-        return Err(anyhow::anyhow!(
-            "Classes are not defined in the model configuration"
-        ));
-    }
-
-    let model = M::load_from_safetensors(device, model_file, model_config.clone());
-
-    // TODO: Move this logic to a trait implementation
-    // Initialize the linear output
-    // let output = LinearConfig::new(model_config.hidden_size(), n_classes).init(device);
-
-    // let temp = model_config.init(device);
-
-    // let model_record: M::Record = ModelRecord {
-    //     model: from_safetensors(model_file, device, model_config),
-    //     output: LinearRecord {
-    //         weight: output.weight,
-    //         bias: output.bias,
-    //     },
-    //     n_classes: ConstantRecord::new(),
-    // };
-
-    // let model = temp.load_record(model_record);
+    let model = M::load_from_safetensors(device, model_file, model_config.clone())?;
 
     // Initialize tokenizer
     let tokenizer = Tokenizer::from_pretrained(&config.model_name, None).unwrap();
@@ -171,11 +110,16 @@ where
     // Initialize learning rate scheduler
     let lr_scheduler = NoamLrSchedulerConfig::new(config.learning_rate)
         .with_warmup_steps(0)
-        .with_model_size(model_config.hidden_size())
+        .with_model_size(pipeline_config.hidden_size)
         .init();
 
+    let artifact_dir = format!(
+        "{}/pipelines/text-classification/{}",
+        config.data_dir, model
+    );
+
     // Initialize learner
-    let learner = LearnerBuilder::new(artifact_dir)
+    let learner = LearnerBuilder::new(&artifact_dir)
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
         .metric_train_numeric(AccuracyMetric::new())
@@ -205,27 +149,4 @@ where
         .unwrap();
 
     Ok(())
-}
-
-/// Download model config and weights from Hugging Face Hub
-/// If file exists in cache, it will not be downloaded again
-async fn download_hf_model(model_name: &str) -> (PathBuf, PathBuf) {
-    let api = hf_hub::api::tokio::Api::new().unwrap();
-    let repo = api.model(model_name.to_string());
-
-    let model_filepath = repo.get("model.safetensors").await.unwrap_or_else(|_| {
-        panic!(
-            "Failed to download: {} weights with name: model.safetensors from HuggingFace Hub",
-            model_name
-        )
-    });
-
-    let config_filepath = repo.get("config.json").await.unwrap_or_else(|_| {
-        panic!(
-            "Failed to download: {} config with name: config.json from HuggingFace Hub",
-            model_name
-        )
-    });
-
-    (config_filepath, model_filepath)
 }

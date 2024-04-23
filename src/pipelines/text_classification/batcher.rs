@@ -12,7 +12,7 @@ use tokenizers::Tokenizer;
 
 use crate::datasets::snips;
 
-use super::pipeline::ModelConfig;
+use super::ModelConfig;
 
 /// An inference batch for text classification
 #[derive(Debug, Clone, new)]
@@ -48,8 +48,8 @@ pub struct Batcher<B: Backend> {
     /// ID of the UNK token
     unk_token_id: usize,
 
-    /// A map from class names to their corresponding ids
-    class_map: HashMap<String, usize>,
+    /// A reverse map from class names to their corresponding ids
+    reverse_map: HashMap<String, usize>,
 
     /// Device on which to perform computation (e.g., CPU or CUDA device)
     device: B::Device,
@@ -58,19 +58,21 @@ pub struct Batcher<B: Backend> {
 impl<B: Backend> Batcher<B> {
     /// Creates a new batcher
     pub fn new<C: ModelConfig>(tokenizer: Tokenizer, config: C, device: B::Device) -> Self {
-        let class_map = config.label2id();
+        let config = config.get_config();
 
-        let unk_token_id = class_map
+        let reverse_map = config.label2id;
+
+        let unk_token_id = reverse_map
             .get("UNK")
-            .unwrap_or(&(config.pad_token_id() + 1))
+            .unwrap_or(&(config.pad_token_id + 1))
             .to_owned();
 
         Self {
             tokenizer,
-            pad_token_id: config.pad_token_id(),
+            pad_token_id: config.pad_token_id,
             unk_token_id,
-            max_seq_length: config.max_position_embeddings(),
-            class_map,
+            max_seq_length: config.max_position_embeddings,
+            reverse_map,
             device,
         }
     }
@@ -112,7 +114,7 @@ impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
 }
 
 /// Implement Batcher trait for Batcher struct for training
-/// TODO: Make this generic
+/// TODO: Make this generic for any dataset that provides what we need
 impl<B: Backend> dataloader::batcher::Batcher<snips::Item, Train<B>> for Batcher<B> {
     /// Collects a vector of text classification items into a training batch
     fn batch(&self, items: Vec<snips::Item>) -> Train<B> {
@@ -125,7 +127,7 @@ impl<B: Backend> dataloader::batcher::Batcher<snips::Item, Train<B>> for Batcher
         // Tokenize text and create class_id tensor for each item
         for item in items {
             let class_id = self
-                .class_map
+                .reverse_map
                 .get(&item.intent)
                 .unwrap_or(&self.unk_token_id);
 

@@ -7,6 +7,7 @@ use bert_burn::{
     model::{BertModel, BertModelConfig, BertModelOutput},
 };
 use burn::{
+    config::Config as _,
     module::{ConstantRecord, Module},
     nn::{loss::CrossEntropyLossConfig, Linear, LinearConfig, LinearRecord},
     tensor::{
@@ -17,21 +18,9 @@ use burn::{
     train::{ClassificationOutput, TrainOutput, TrainStep, ValidStep},
 };
 use derive_new::new;
+use tokio::io;
 
-use crate::pipelines::text_classification;
-
-/// The Bert model name on Hugging Face
-pub const MODEL_NAME: &str = "bert-base-uncased";
-
-/// A training batch for text classification
-#[derive(Clone, Debug, new)]
-pub struct Train<B: Backend> {
-    /// Bert Model input
-    pub input: BertInferenceBatch<B>,
-
-    /// Class ids for the batch
-    pub targets: Tensor<B, 1, Int>,
-}
+use crate::{pipelines::text_classification, utils::files::read_file};
 
 /// BERT for text Classification
 #[derive(Module, Debug, new)]
@@ -49,19 +38,23 @@ pub struct Model<B: Backend> {
 /// Define model behavior
 impl<B: Backend> Model<B> {
     /// Defines forward pass for training
-    pub fn forward(&self, item: Train<B>) -> ClassificationOutput<B>
+    pub fn forward(
+        &self,
+        input: BertInferenceBatch<B>,
+        targets: Tensor<B, 1, Int>,
+    ) -> ClassificationOutput<B>
     where
         i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
     {
-        let [batch_size, _seq_length] = item.input.tokens.dims();
+        let [batch_size, _seq_length] = input.tokens.dims();
         let device = &self.model.devices()[0];
 
-        let targets = item.targets.to_device(device);
+        let targets = targets.to_device(device);
 
         let BertModelOutput {
             pooled_output,
             hidden_states,
-        } = self.model.forward(item.input);
+        } = self.model.forward(input);
 
         let output = self
             .output
@@ -105,8 +98,11 @@ pub struct Config {
     /// The base BERT config
     pub model: BertModelConfig,
 
-    /// A map from class ids to class names
+    /// A map from class ids to class name labels
     pub id2label: HashMap<usize, String>,
+
+    /// A reverse map from class name labels to class ids
+    pub label2id: HashMap<String, usize>,
 }
 
 impl Config {
@@ -125,28 +121,42 @@ impl Config {
         }
     }
 
-    /// Generate a map from class names to class ids
-    pub fn get_reverse_class_map(&self) -> HashMap<String, usize> {
-        let mut swapped_map: HashMap<String, usize> = HashMap::new();
+    /// Load configuration from file for training a particular task
+    pub async fn new_for_task(model: BertModelConfig, dataset_dir: &str) -> io::Result<Self> {
+        let id2label = read_file(&format!("{}/intent_labels.txt", dataset_dir))
+            .await?
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| (i, s.trim().to_string()))
+            .collect::<HashMap<_, _>>();
 
-        // Iterate through the original map
-        for (key, value) in &self.id2label {
-            // Insert the value as a key and the key as a value into the new map
-            swapped_map.insert(value.clone(), *key);
-        }
+        let label2id = id2label
+            .iter()
+            .map(|(k, v)| (v.clone(), *k))
+            .collect::<HashMap<_, _>>();
 
-        swapped_map
+        Ok(Config::new(model, id2label, label2id))
     }
 }
 
 /// Define training step
-impl<B: AutodiffBackend> TrainStep<Train<B>, ClassificationOutput<B>> for Model<B>
+impl<B: AutodiffBackend> TrainStep<text_classification::batcher::Train<B>, ClassificationOutput<B>>
+    for Model<B>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
-    fn step(&self, item: Train<B>) -> TrainOutput<ClassificationOutput<B>> {
+    fn step(
+        &self,
+        item: text_classification::batcher::Train<B>,
+    ) -> TrainOutput<ClassificationOutput<B>> {
         // Run forward pass, calculate gradients and return them along with the output
-        let output = self.forward(item);
+        let output = self.forward(
+            BertInferenceBatch {
+                tokens: item.input.tokens,
+                mask_pad: item.input.mask_pad,
+            },
+            item.targets,
+        );
         let grads = output.loss.backward();
 
         TrainOutput::new(self, grads, output)
@@ -154,17 +164,24 @@ where
 }
 
 /// Define validation step
-impl<B: Backend> ValidStep<Train<B>, ClassificationOutput<B>> for Model<B>
+impl<B: Backend> ValidStep<text_classification::batcher::Train<B>, ClassificationOutput<B>>
+    for Model<B>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
-    fn step(&self, item: Train<B>) -> ClassificationOutput<B> {
+    fn step(&self, item: text_classification::batcher::Train<B>) -> ClassificationOutput<B> {
         // Run forward pass and return the output
-        self.forward(item)
+        self.forward(
+            BertInferenceBatch {
+                tokens: item.input.tokens,
+                mask_pad: item.input.mask_pad,
+            },
+            item.targets,
+        )
     }
 }
 
-impl<B: AutodiffBackend> text_classification::pipeline::Model<B> for Model<B>
+impl<B: AutodiffBackend> text_classification::Model<B> for Model<B>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
@@ -175,39 +192,9 @@ where
     fn load_from_safetensors(
         device: &B::Device,
         model_file: PathBuf,
-        model_config: Self::Config,
-    ) -> Self {
-        BertModel::from_safetensors(model_file, device, model_config, true)
-    }
-
-    /// Perform a forward pass
-    fn forward(&self, item: text_classification::batcher::Train<B>) -> ClassificationOutput<B> {
-        self.forward(item)
-    }
-
-    /// Defines forward pass for inference
-    fn infer(&self, input: text_classification::batcher::Infer<B>) -> Tensor<B, 2> {
-        self.infer(input)
-    }
-}
-
-impl<B: AutodiffBackend> text_classification::pipeline::ModelConfig for Model<B> {
-    /// Load a pretrained model configuration
-    fn load_pretrained(
-        config_file: PathBuf,
-        max_seq_len: usize,
-        hidden_dropout_prob: f64,
+        config: Self::Config,
     ) -> anyhow::Result<Self> {
-        let mut bert_config = BertModelConfig::load(config_file)
-            .map_err(|e| anyhow!("Unable to load Hugging Face Config file: {}", e))?;
-
-        bert_config.max_seq_len = Some(max_seq_len);
-        bert_config.hidden_dropout_prob = hidden_dropout_prob;
-
-        let model_config = Config::new(bert_config.clone(), config.id2label);
-
-        let n_classes = model_config.id2label.len();
-
+        let n_classes = config.id2label.len();
         if n_classes == 0 {
             return Err(anyhow::anyhow!(
                 "Classes are not defined in the model configuration"
@@ -215,44 +202,75 @@ impl<B: AutodiffBackend> text_classification::pipeline::ModelConfig for Model<B>
         }
 
         // Initialize the linear output
-        let output = LinearConfig::new(model_config.model.hidden_size, n_classes).init(device);
+        let output = LinearConfig::new(config.model.hidden_size, n_classes).init(device);
 
-        model_config.init(device).load_record(ModelRecord {
-            model: BertModel::from_safetensors(model_file, device, bert_config, true),
+        let model = config.init(device).load_record(ModelRecord {
+            model: BertModel::from_safetensors(model_file, device, config.model, true),
             output: LinearRecord {
                 weight: output.weight,
                 bias: output.bias,
             },
             n_classes: ConstantRecord::new(),
-        })
+        });
+
+        Ok(model)
     }
 
+    /// Perform a forward pass
+    fn forward(&self, item: text_classification::batcher::Train<B>) -> ClassificationOutput<B> {
+        self.forward(
+            BertInferenceBatch {
+                tokens: item.input.tokens,
+                mask_pad: item.input.mask_pad,
+            },
+            item.targets,
+        )
+    }
+
+    /// Defines forward pass for inference
+    fn infer(&self, input: text_classification::batcher::Infer<B>) -> Tensor<B, 2> {
+        self.infer(BertInferenceBatch {
+            tokens: input.tokens,
+            mask_pad: input.mask_pad,
+        })
+    }
+}
+
+impl text_classification::ModelConfig for Config {
     /// Initialize the model
-    fn init<B: AutodiffBackend, M: Model<B>>(&self, device: &B::Device) -> M
+    fn init<B: AutodiffBackend>(&self, device: &B::Device) -> impl text_classification::Model<B>
     where
-        i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>;
+        i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+    {
+        self.init(device)
+    }
 
-    /// Return the padding token ID
-    fn pad_token_id(&self) -> usize;
+    /// Load a pretrained model configuration
+    async fn load_pretrained(config_file: PathBuf, dataset_dir: &str) -> anyhow::Result<Self> {
+        let bert_config = BertModelConfig::load(config_file)
+            .map_err(|e| anyhow!("Unable to load Hugging Face Config file: {}", e))?;
 
-    /// Return the maximum sequence length
-    fn max_position_embeddings(&self) -> usize;
+        let model_config = Config::new_for_task(bert_config, dataset_dir).await?;
 
-    /// Return the embedding size (e.g., 768 for roberta-base)
-    fn hidden_size(&self) -> usize;
+        let n_classes = model_config.id2label.len();
+        if n_classes == 0 {
+            return Err(anyhow::anyhow!(
+                "Classes are not defined in the model configuration"
+            ));
+        }
 
-    /// Return the maximum sequence length, if available
-    fn max_seq_len(&self) -> Option<usize>;
+        Ok(model_config)
+    }
 
-    /// Return the hidden dropout probability
-    fn hidden_dropout_prob(&self) -> f64;
-
-    /// Set the hidden dropout probability
-    fn set_hidden_dropout_prob(&mut self, value: f64);
-
-    /// Return a mapping from class ids to class name labels
-    fn id2label(&self) -> HashMap<usize, String>;
-
-    /// Return a mapping from class name labels to class ids
-    fn label2id(&self) -> HashMap<String, usize>;
+    fn get_config(&self) -> text_classification::Config {
+        text_classification::Config {
+            pad_token_id: self.model.pad_token_id,
+            max_position_embeddings: self.model.max_position_embeddings,
+            hidden_size: self.model.hidden_size,
+            max_seq_len: self.model.max_seq_len,
+            hidden_dropout_prob: self.model.hidden_dropout_prob,
+            id2label: self.id2label.clone(),
+            label2id: self.label2id.clone(),
+        }
+    }
 }

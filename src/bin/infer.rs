@@ -3,9 +3,7 @@
 use anyhow::{anyhow, Result};
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
-    datasets::snips,
-    models::bert::sequence_classification::{self, MODEL_NAME},
-    pipelines::text_classification::infer,
+    datasets::snips, models::bert::sequence_classification, pipelines::text_classification::infer,
 };
 use pico_args::Arguments;
 
@@ -59,11 +57,15 @@ async fn main() -> Result<()> {
     }
 
     // TODO: Come up with a better mechanism for this as pipelines expand
-    if let Some(model) = args.model {
-        if model != "bert" {
-            return Err(anyhow!("Unsupported model: {}", model));
-        }
-    }
+    let model = args
+        .model
+        .map_or(Ok("bert-base-uncased".to_string()), |model| {
+            if model != "bert-base-uncased" {
+                return Err(anyhow!("Unsupported model: {}", model));
+            }
+
+            Ok(model)
+        })?;
 
     let data_root = "data";
     let task_root = format!("{}/snips", data_root);
@@ -108,7 +110,7 @@ async fn main() -> Result<()> {
         Autodiff<LibTorch>,
         sequence_classification::Model<Autodiff<LibTorch>>,
         snips::Dataset,
-    >(device, MODEL_NAME, &artifact_dir, input)?;
+    >(device, &model, &artifact_dir, input)?;
 
     // Print out predictions for each sample
     for (i, (text, expected)) in samples.into_iter().enumerate() {

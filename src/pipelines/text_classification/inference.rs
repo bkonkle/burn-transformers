@@ -1,6 +1,7 @@
 use burn::{
     config::Config as _,
     data::{dataloader::batcher::Batcher as BatcherTrait, dataset::Dataset},
+    module::Module,
     record::{CompactRecorder, Recorder},
     tensor::{backend::AutodiffBackend, Tensor},
 };
@@ -10,8 +11,7 @@ use tokenizers::Tokenizer;
 use crate::datasets::snips;
 
 use super::{
-    pipeline::{Model, ModelConfig},
-    Batcher,
+    Batcher, {Model, ModelConfig},
 };
 
 /// Define inference function
@@ -25,10 +25,8 @@ where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
     // Load experiment configuration
-    let mut config = M::Config::load(format!("{artifact_dir}/config.json").as_str())
+    let config = M::Config::load(format!("{artifact_dir}/config.json").as_str())
         .map_err(|e| anyhow!("Unable to load config file: {}", e))?;
-
-    config.set_hidden_dropout_prob(0.0);
 
     // Initialize tokenizer
     let tokenizer = Tokenizer::from_pretrained(model_name, None).unwrap();
@@ -50,12 +48,12 @@ where
     // Create model using loaded weights
     println!("Creating model...");
 
-    let model = config.init::<B, M>(&device).load_record(record);
+    let model = config.init::<B>(&device).load_record(record);
 
     // Run inference on the given text samples
     println!("Running inference...");
 
     let item = batcher.batch(samples.clone()); // Batch samples using the batcher
 
-    Ok((model.infer(item), config))
+    Ok((model.infer(item), config.clone()))
 }
