@@ -72,16 +72,17 @@ where
     >,
 {
     let device = &devices[0];
+    let dataset_dir = format!("{}/datasets/{}", config.data_dir, config.dataset_name);
+    let artifact_dir = format!(
+        "{}/pipelines/text-classification/{}",
+        config.data_dir, config.model_name
+    );
 
     let (config_file, model_file) = download_hf_model(&config.model_name).await;
-
-    let dataset_dir = format!("{}/datasets/{}", config.data_dir, config.dataset_name);
 
     let model_config = M::Config::load_pretrained(config_file, &dataset_dir)
         .await
         .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
-
-    let pipeline_config = model_config.get_config();
 
     let model = M::load_from_safetensors(device, model_file, model_config.clone())?;
 
@@ -110,13 +111,8 @@ where
     // Initialize learning rate scheduler
     let lr_scheduler = NoamLrSchedulerConfig::new(config.learning_rate)
         .with_warmup_steps(0)
-        .with_model_size(pipeline_config.hidden_size)
+        .with_model_size(model_config.get_config().hidden_size)
         .init();
-
-    let artifact_dir = format!(
-        "{}/pipelines/text-classification/{}",
-        config.data_dir, model
-    );
 
     // Initialize learner
     let learner = LearnerBuilder::new(&artifact_dir)

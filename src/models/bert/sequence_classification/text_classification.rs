@@ -1,143 +1,25 @@
-#![allow(clippy::too_many_arguments)]
+//! Adapt Bert for Sequence Classification to the Text Classification pipeline
 
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
 use bert_burn::{
     data::BertInferenceBatch,
-    model::{BertModel, BertModelConfig, BertModelOutput},
+    model::{BertModel, BertModelConfig},
 };
 use burn::{
     config::Config as _,
     module::{ConstantRecord, Module},
-    nn::{loss::CrossEntropyLossConfig, Linear, LinearConfig, LinearRecord},
+    nn::{LinearConfig, LinearRecord},
     tensor::{
-        activation::softmax,
         backend::{AutodiffBackend, Backend},
-        Int, Tensor,
+        Tensor,
     },
     train::{ClassificationOutput, TrainOutput, TrainStep, ValidStep},
 };
-use derive_new::new;
-use tokio::io;
 
-use crate::{pipelines::text_classification, utils::files::read_file};
+use crate::pipelines::text_classification;
 
-/// BERT for text Classification
-#[derive(Module, Debug, new)]
-pub struct Model<B: Backend> {
-    /// The base BERT model
-    pub model: BertModel<B>,
-
-    /// Linear layer for text classification
-    pub output: Linear<B>,
-
-    /// Total number of classes
-    pub n_classes: usize,
-}
-
-/// Define model behavior
-impl<B: Backend> Model<B> {
-    /// Defines forward pass for training
-    pub fn forward(
-        &self,
-        input: BertInferenceBatch<B>,
-        targets: Tensor<B, 1, Int>,
-    ) -> ClassificationOutput<B>
-    where
-        i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
-    {
-        let [batch_size, _seq_length] = input.tokens.dims();
-        let device = &self.model.devices()[0];
-
-        let targets = targets.to_device(device);
-
-        let BertModelOutput {
-            pooled_output,
-            hidden_states,
-        } = self.model.forward(input);
-
-        let output = self
-            .output
-            .forward(pooled_output.unwrap_or(hidden_states))
-            .slice([0..batch_size, 0..1])
-            .reshape([batch_size, self.n_classes]);
-
-        let loss = CrossEntropyLossConfig::new()
-            .init(&output.device())
-            .forward(output.clone(), targets.clone());
-
-        ClassificationOutput {
-            loss,
-            output,
-            targets,
-        }
-    }
-
-    /// Defines forward pass for inference
-    pub fn infer(&self, input: BertInferenceBatch<B>) -> Tensor<B, 2> {
-        let [batch_size, _seq_length] = input.tokens.dims();
-
-        let BertModelOutput {
-            pooled_output,
-            hidden_states,
-        } = self.model.forward(input);
-
-        let output = self
-            .output
-            .forward(pooled_output.unwrap_or(hidden_states))
-            .slice([0..batch_size, 0..1])
-            .reshape([batch_size, self.n_classes]);
-
-        softmax(output, 1)
-    }
-}
-
-/// The Model Configuration
-#[derive(burn::config::Config)]
-pub struct Config {
-    /// The base BERT config
-    pub model: BertModelConfig,
-
-    /// A map from class ids to class name labels
-    pub id2label: HashMap<usize, String>,
-
-    /// A reverse map from class name labels to class ids
-    pub label2id: HashMap<String, usize>,
-}
-
-impl Config {
-    /// Initializes a Bert model with default weights
-    pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
-        let model = self.model.init(device, true);
-
-        let n_classes = self.id2label.len();
-
-        let output = LinearConfig::new(self.model.hidden_size, n_classes).init(device);
-
-        Model {
-            model,
-            output,
-            n_classes,
-        }
-    }
-
-    /// Load configuration from file for training a particular task
-    pub async fn new_for_task(model: BertModelConfig, dataset_dir: &str) -> io::Result<Self> {
-        let id2label = read_file(&format!("{}/intent_labels.txt", dataset_dir))
-            .await?
-            .into_iter()
-            .enumerate()
-            .map(|(i, s)| (i, s.trim().to_string()))
-            .collect::<HashMap<_, _>>();
-
-        let label2id = id2label
-            .iter()
-            .map(|(k, v)| (v.clone(), *k))
-            .collect::<HashMap<_, _>>();
-
-        Ok(Config::new(model, id2label, label2id))
-    }
-}
+use super::{Config, Model, ModelRecord};
 
 /// Define training step
 impl<B: AutodiffBackend> TrainStep<text_classification::batcher::Train<B>, ClassificationOutput<B>>

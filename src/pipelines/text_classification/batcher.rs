@@ -71,7 +71,7 @@ impl<B: Backend> Batcher<B> {
             tokenizer,
             pad_token_id: config.pad_token_id,
             unk_token_id,
-            max_seq_length: config.max_position_embeddings,
+            max_seq_length: config.max_seq_len.unwrap_or(config.max_position_embeddings),
             reverse_map,
             device,
         }
