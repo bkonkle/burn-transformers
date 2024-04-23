@@ -17,20 +17,16 @@ use burn::{
     train::{ClassificationOutput, TrainOutput, TrainStep, ValidStep},
 };
 
-use crate::pipelines::text_classification;
+use crate::pipelines::text_classification::{self, batcher};
 
 use super::{Config, Model, ModelRecord};
 
 /// Define training step
-impl<B: AutodiffBackend> TrainStep<text_classification::batcher::Train<B>, ClassificationOutput<B>>
-    for Model<B>
+impl<B: AutodiffBackend> TrainStep<batcher::Train<B>, ClassificationOutput<B>> for Model<B>
 where
-    i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+    i64: From<<B as Backend>::IntElem>,
 {
-    fn step(
-        &self,
-        item: text_classification::batcher::Train<B>,
-    ) -> TrainOutput<ClassificationOutput<B>> {
+    fn step(&self, item: batcher::Train<B>) -> TrainOutput<ClassificationOutput<B>> {
         // Run forward pass, calculate gradients and return them along with the output
         let output = self.forward(
             BertInferenceBatch {
@@ -46,12 +42,11 @@ where
 }
 
 /// Define validation step
-impl<B: Backend> ValidStep<text_classification::batcher::Train<B>, ClassificationOutput<B>>
-    for Model<B>
+impl<B: Backend> ValidStep<batcher::Train<B>, ClassificationOutput<B>> for Model<B>
 where
-    i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+    i64: From<<B as Backend>::IntElem>,
 {
-    fn step(&self, item: text_classification::batcher::Train<B>) -> ClassificationOutput<B> {
+    fn step(&self, item: batcher::Train<B>) -> ClassificationOutput<B> {
         // Run forward pass and return the output
         self.forward(
             BertInferenceBatch {
@@ -65,7 +60,7 @@ where
 
 impl<B: AutodiffBackend> text_classification::Model<B> for Model<B>
 where
-    i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+    i64: From<<B as Backend>::IntElem>,
 {
     /// The model configuration
     type Config = Config;
@@ -99,7 +94,7 @@ where
     }
 
     /// Perform a forward pass
-    fn forward(&self, item: text_classification::batcher::Train<B>) -> ClassificationOutput<B> {
+    fn forward(&self, item: batcher::Train<B>) -> ClassificationOutput<B> {
         self.forward(
             BertInferenceBatch {
                 tokens: item.input.tokens,
@@ -110,7 +105,7 @@ where
     }
 
     /// Defines forward pass for inference
-    fn infer(&self, input: text_classification::batcher::Infer<B>) -> Tensor<B, 2> {
+    fn infer(&self, input: batcher::Infer<B>) -> Tensor<B, 2> {
         self.infer(BertInferenceBatch {
             tokens: input.tokens,
             mask_pad: input.mask_pad,
@@ -122,7 +117,7 @@ impl text_classification::ModelConfig for Config {
     /// Initialize the model
     fn init<B: AutodiffBackend>(&self, device: &B::Device) -> impl text_classification::Model<B>
     where
-        i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+        i64: From<<B as Backend>::IntElem>,
     {
         self.init(device)
     }

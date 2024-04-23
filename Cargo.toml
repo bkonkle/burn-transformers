@@ -10,6 +10,8 @@ license = "MIT"
 
 [patch.crates-io]
 burn = { path = "../burn/crates/burn" }
+
+[patch."https://github.com/bkonkle/burn-models"]
 bert-burn = { path = "../burn-models/bert-burn" }
 
 [dependencies]

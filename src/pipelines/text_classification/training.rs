@@ -58,14 +58,19 @@ pub struct Config {
 }
 
 /// Define train function
-pub async fn train<B: AutodiffBackend, M: Model<B> + 'static, D: Dataset<snips::Item> + 'static>(
+pub async fn train<B, M, D>(
     devices: Vec<B::Device>, // Device on which to perform computation (e.g., CPU or CUDA device)
     dataset_train: D,        // Training dataset
     dataset_test: D,         // Testing dataset
     config: Config,          // Experiment configuration
 ) -> anyhow::Result<()>
 where
+    B: AutodiffBackend,
+    M: Model<B> + 'static,
+    D: Dataset<snips::Item> + 'static,
+
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+
     M::InnerModule: ValidStep<
         Train<<B as AutodiffBackend>::InnerBackend>,
         ClassificationOutput<<B as AutodiffBackend>::InnerBackend>,

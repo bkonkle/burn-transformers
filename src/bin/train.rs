@@ -1,6 +1,6 @@
 //! Command line tool to trigger training (WIP)
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
     datasets::snips,
@@ -35,7 +35,7 @@ struct Args {
     /// The dataset to use (e.g., 'snips')
     dataset: String,
 
-    /// The model to use (e.g., 'bert')
+    /// The model to use (e.g., 'bert-base-uncased')
     model: Option<String>,
 
     /// Number of epochs to train for
@@ -48,33 +48,30 @@ struct Args {
     data_dir: Option<String>,
 }
 
-fn parse_args() -> Result<Args, pico_args::Error> {
+fn parse_args() -> anyhow::Result<Args> {
     let mut pargs = Arguments::from_env();
-
-    let free: std::path::PathBuf = pargs.free_from_str()?;
-
-    // Split the free text on whitespace
-    let tokens: Vec<_> = free
-        .to_str()
-        .unwrap_or_default()
-        .split_whitespace()
-        .collect();
 
     let args = Args {
         help: pargs.contains(["-h", "--help"]),
-        pipeline: tokens[0].to_string(),
-        dataset: tokens[1].to_string(),
         model: pargs.opt_value_from_str(["-m", "--model"])?,
         num_epochs: pargs.opt_value_from_str(["-n", "--num-epochs"])?,
         batch_size: pargs.opt_value_from_str(["-b", "--batch-size"])?,
         data_dir: pargs.opt_value_from_str(["-d", "--data-dir"])?,
+        pipeline: pargs.free_from_str().map_err(|e| match e {
+            pico_args::Error::MissingArgument => anyhow!("Missing required argument: PIPELINE"),
+            _ => anyhow!("{}", e),
+        })?,
+        dataset: pargs.free_from_str().map_err(|e| match e {
+            pico_args::Error::MissingArgument => anyhow!("Missing required argument: DATASET"),
+            _ => anyhow!("{}", e),
+        })?,
     };
 
     Ok(args)
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     let args = parse_args()?;
 
     if args.help {
@@ -89,7 +86,7 @@ async fn main() -> Result<()> {
 
     // TODO: Come up with a better mechanism for this as datasets expand
     if args.dataset != "snips" {
-        return Err(anyhow!("Unsupported pipeline: {}", args.pipeline));
+        return Err(anyhow!("Unsupported dataset: {}", args.dataset));
     }
 
     // TODO: Come up with a better mechanism for this as models expand
@@ -103,7 +100,7 @@ async fn main() -> Result<()> {
             Ok(model)
         })?;
 
-    let mut config = Config::new(model, args.dataset.clone());
+    let mut config = Config::new(model, args.dataset);
 
     if let Some(num_epochs) = args.num_epochs {
         config.num_epochs = num_epochs;
@@ -126,8 +123,8 @@ async fn main() -> Result<()> {
         snips::Dataset,
     >(
         vec![device],
-        snips::Dataset::train().await?,
-        snips::Dataset::test().await?,
+        snips::Dataset::load(&config.data_dir, "train").await?,
+        snips::Dataset::load(&config.data_dir, "test").await?,
         config,
     )
     .await?;

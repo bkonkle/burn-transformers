@@ -37,23 +37,13 @@ impl dataset::Dataset<Item> for Dataset {
 // Implement methods for constructing the Snips dataset
 impl Dataset {
     /// Constructs the dataset for a mode (either "train" or "test")
-    pub async fn load(data_root: &str, mode: &str) -> std::io::Result<Self> {
-        let task_root = format!("{}/snips", data_root);
+    pub async fn load(data_dir: &str, mode: &str) -> std::io::Result<Self> {
+        let dataset_dir = format!("{}/datasets/snips", data_dir);
         let reader = csv::ReaderBuilder::new();
 
         let dataset: InMemDataset<Item> =
-            InMemDataset::from_csv(format!("{}/{}.csv", task_root, mode), &reader)?;
+            InMemDataset::from_csv(format!("{}/{}.csv", dataset_dir, mode), &reader)?;
 
         Ok(Self { dataset })
-    }
-
-    /// Returns the training portion of the dataset
-    pub async fn train() -> std::io::Result<Self> {
-        Self::load("data", "train").await
-    }
-
-    /// Returns the testing portion of the dataset
-    pub async fn test() -> std::io::Result<Self> {
-        Self::load("data", "test").await
     }
 }
