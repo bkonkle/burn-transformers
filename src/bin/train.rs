@@ -18,7 +18,7 @@ Arguments:
 
 Options:
   -h, --help           Print help
-  -m, --model          The model to use (e.g., 'bert')
+  -m, --model          The model to use (e.g., 'bert-base-uncased')
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
   -d, --data-dir       The path to the top-level data directory (defaults to 'data')
@@ -26,58 +26,53 @@ Options:
 
 #[derive(Debug)]
 struct Args {
-    /// Prints the usage menu
-    help: bool,
-
-    /// The pipeline to use (e.g., 'text-classification')
     pipeline: String,
-
-    /// The dataset to use (e.g., 'snips')
     dataset: String,
-
-    /// The model to use (e.g., 'bert-base-uncased')
     model: Option<String>,
-
-    /// Number of epochs to train for
     num_epochs: Option<usize>,
-
-    /// Batch size
     batch_size: Option<usize>,
-
-    /// The path to the top-level data directory (defaults to 'data')
     data_dir: Option<String>,
 }
 
-fn parse_args() -> anyhow::Result<Args> {
-    let mut pargs = Arguments::from_env();
+impl Args {
+    fn parse() -> anyhow::Result<Option<Self>> {
+        let mut pargs = Arguments::from_env();
 
-    let args = Args {
-        help: pargs.contains(["-h", "--help"]),
-        model: pargs.opt_value_from_str(["-m", "--model"])?,
-        num_epochs: pargs.opt_value_from_str(["-n", "--num-epochs"])?,
-        batch_size: pargs.opt_value_from_str(["-b", "--batch-size"])?,
-        data_dir: pargs.opt_value_from_str(["-d", "--data-dir"])?,
-        pipeline: pargs.free_from_str().map_err(|e| match e {
-            pico_args::Error::MissingArgument => anyhow!("Missing required argument: PIPELINE"),
-            _ => anyhow!("{}", e),
-        })?,
-        dataset: pargs.free_from_str().map_err(|e| match e {
-            pico_args::Error::MissingArgument => anyhow!("Missing required argument: DATASET"),
-            _ => anyhow!("{}", e),
-        })?,
-    };
+        // Help has a higher priority and should be handled separately.
+        if pargs.contains(["-h", "--help"]) {
+            return Ok(None);
+        }
 
-    Ok(args)
+        let args = Args {
+            model: pargs.opt_value_from_str(["-m", "--model"])?,
+            num_epochs: pargs.opt_value_from_str(["-n", "--num-epochs"])?,
+            batch_size: pargs.opt_value_from_str(["-b", "--batch-size"])?,
+            data_dir: pargs.opt_value_from_str(["-d", "--data-dir"])?,
+            pipeline: pargs.free_from_str().map_err(|e| match e {
+                pico_args::Error::MissingArgument => anyhow!("Missing required argument: PIPELINE"),
+                _ => anyhow!("{}", e),
+            })?,
+            dataset: pargs.free_from_str().map_err(|e| match e {
+                pico_args::Error::MissingArgument => anyhow!("Missing required argument: DATASET"),
+                _ => anyhow!("{}", e),
+            })?,
+        };
+
+        Ok(Some(args))
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = parse_args()?;
+    let output = Args::parse()?;
 
-    if args.help {
-        println!("{}", HELP);
+    if output.is_none() {
+        print!("{}", HELP);
+
         return Ok(());
     }
+
+    let args = output.unwrap();
 
     // TODO: Come up with a better mechanism for this as pipelines expand
     if args.pipeline != "text-classification" {

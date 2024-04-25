@@ -16,12 +16,7 @@ bert-burn = { path = "../burn-models/bert-burn" }
 
 [dependencies]
 anyhow = "1.0"
-burn = { version = "0.13", features = [
-    "train",
-    "cuda",
-    "tch",
-    "metrics",
-], default-features = false }
+burn = { version = "0.13", features = ["train", "cuda", "tch", "metrics"] }
 bert-burn = { git = "https://github.com/bkonkle/burn-models", branch = "feature/22-custom-bert-model-outputs", package = "bert-burn", features = [
     "safetensors",
     "tch-gpu",
