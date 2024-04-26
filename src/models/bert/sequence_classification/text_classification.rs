@@ -21,6 +21,12 @@ use crate::pipelines::text_classification::{self, batcher};
 
 use super::{Config, Model, ModelRecord};
 
+/// Available models to use with Bert for Text Classification
+pub static MODELS: &[&str] = &["bert-base-cased", "bert-base-uncased"];
+
+/// The default model to use
+pub static DEFAULT_MODEL: &str = "bert-base-uncased";
+
 /// Define training step
 impl<B: AutodiffBackend> TrainStep<batcher::Train<B>, ClassificationOutput<B>> for Model<B>
 where

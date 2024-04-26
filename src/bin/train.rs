@@ -3,9 +3,12 @@
 use anyhow::anyhow;
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
-    datasets::snips,
-    models::bert::sequence_classification,
-    pipelines::text_classification::training::{self, Config},
+    datasets::{snips, Dataset},
+    models::{bert::sequence_classification, Model},
+    pipelines::{
+        text_classification::training::{self, Config},
+        Pipeline,
+    },
 };
 use pico_args::Arguments;
 
@@ -74,28 +77,19 @@ async fn main() -> anyhow::Result<()> {
 
     let args = output.unwrap();
 
-    // TODO: Come up with a better mechanism for this as pipelines expand
-    if args.pipeline != "text-classification" {
-        return Err(anyhow!("Unsupported pipeline: {}", args.pipeline));
-    }
+    // TODO: Use this value to determine which "train()" function to call below
+    let pipeline = Pipeline::try_from(args.pipeline)?;
 
-    // TODO: Come up with a better mechanism for this as datasets expand
-    if args.dataset != "snips" {
-        return Err(anyhow!("Unsupported dataset: {}", args.dataset));
-    }
+    // TODO: Use this value to dynamically load the dataset to train with
+    let dataset = Dataset::try_from(args.dataset)?;
 
-    // TODO: Come up with a better mechanism for this as models expand
-    let model = args
-        .model
-        .map_or(Ok("bert-base-uncased".to_string()), |model| {
-            if model != "bert-base-uncased" {
-                return Err(anyhow!("Unsupported model: {}", model));
-            }
+    let model = if let Some(model) = args.model.clone() {
+        Model::try_from(model)?
+    } else {
+        pipeline.default_model()
+    };
 
-            Ok(model)
-        })?;
-
-    let mut config = Config::new(model, args.dataset);
+    let mut config = Config::new(model.into(), dataset.into());
 
     if let Some(num_epochs) = args.num_epochs {
         config.num_epochs = num_epochs;
