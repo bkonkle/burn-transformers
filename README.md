@@ -13,6 +13,9 @@ Burn Transformers is an early-stage work-in-progress port of the [Huggingface Tr
 
 🔥 Transformers provides APIs to quickly download and use those pretrained models on a given input, taking advantage of the great tools Huggingface has provided as part of [Candle](https://github.com/huggingface/candle) - their minimalist ML framework for Rust - and fine-tune them on your own datasets using the excellent [Burn](https://burn.dev/) deep learning library in Rust.
 
+⚠️ Alpha Disclaimer
+NOTE: This library is in early development, and the API may shift rapidly as it evolves. Be advised that this is not yet recommended for Production use.
+
 ## Features
 
 | Pipeline | Model | Status |
