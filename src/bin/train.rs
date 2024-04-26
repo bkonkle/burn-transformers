@@ -77,7 +77,6 @@ async fn main() -> anyhow::Result<()> {
 
     let args = output.unwrap();
 
-    // TODO: Use this value to determine which "train()" function to call below
     let pipeline = Pipeline::try_from(args.pipeline)?;
 
     // TODO: Use this value to dynamically load the dataset to train with
@@ -105,18 +104,21 @@ async fn main() -> anyhow::Result<()> {
 
     let device = LibTorchDevice::Cuda(0);
 
-    // TODO: Make this more generic
-    training::train::<
-        Autodiff<LibTorch>,
-        sequence_classification::Model<Autodiff<LibTorch>>,
-        snips::Dataset,
-    >(
-        vec![device],
-        snips::Dataset::load(&config.data_dir, "train").await?,
-        snips::Dataset::load(&config.data_dir, "test").await?,
-        config,
-    )
-    .await?;
+    match pipeline {
+        Pipeline::TextClassification => {
+            training::train::<
+                Autodiff<LibTorch>,
+                sequence_classification::Model<Autodiff<LibTorch>>,
+                snips::Dataset,
+            >(
+                vec![device],
+                snips::Dataset::load(&config.data_dir, "train").await?,
+                snips::Dataset::load(&config.data_dir, "test").await?,
+                config,
+            )
+            .await?;
+        }
+    }
 
     Ok(())
 }
