@@ -2,24 +2,32 @@
 
 use std::collections::HashMap;
 
-use bert_burn::data::BertInferenceBatch;
 use burn::{
     data::dataloader,
     nn::attention::generate_padding_mask,
-    tensor::{backend::Backend, Data, ElementConversion, Int, Tensor},
+    tensor::{backend::Backend, Bool, Data, ElementConversion, Int, Tensor},
 };
 use derive_new::new;
 use tokenizers::Tokenizer;
 
 use crate::datasets::snips;
 
-use super::model;
+use super::ModelConfig;
 
-/// Struct for training batch for sequence classification
+/// An inference batch for text classification
+#[derive(Debug, Clone, new)]
+pub struct Infer<B: Backend> {
+    /// Tokenized text as 2D tensor: [batch_size, max_seq_length]
+    pub tokens: Tensor<B, 2, Int>,
+    /// Padding mask for the tokenized text containing booleans for padding locations
+    pub mask_pad: Tensor<B, 2, Bool>,
+}
+
+/// A training batch for text classification
 #[derive(Clone, Debug, new)]
 pub struct Train<B: Backend> {
     /// Bert Model input
-    pub input: BertInferenceBatch<B>,
+    pub input: Infer<B>,
 
     /// Class ids for the batch
     pub targets: Tensor<B, 1, Int>,
@@ -40,8 +48,8 @@ pub struct Batcher<B: Backend> {
     /// ID of the UNK token
     unk_token_id: usize,
 
-    /// A map from class names to their corresponding ids
-    class_map: HashMap<String, usize>,
+    /// A reverse map from class names to their corresponding ids
+    reverse_map: HashMap<String, usize>,
 
     /// Device on which to perform computation (e.g., CPU or CUDA device)
     device: B::Device,
@@ -49,29 +57,31 @@ pub struct Batcher<B: Backend> {
 
 impl<B: Backend> Batcher<B> {
     /// Creates a new batcher
-    pub fn new(tokenizer: Tokenizer, config: &model::Config, device: B::Device) -> Self {
-        let class_map = config.get_reverse_class_map();
+    pub fn new<C: ModelConfig>(tokenizer: Tokenizer, config: C, device: B::Device) -> Self {
+        let config = config.get_config();
 
-        let unk_token_id = class_map
+        let reverse_map = config.label2id;
+
+        let unk_token_id = reverse_map
             .get("UNK")
-            .unwrap_or(&(config.model.pad_token_id + 1))
+            .unwrap_or(&(config.pad_token_id + 1))
             .to_owned();
 
         Self {
             tokenizer,
-            pad_token_id: config.model.pad_token_id,
+            pad_token_id: config.pad_token_id,
             unk_token_id,
-            max_seq_length: config.model.max_position_embeddings,
-            class_map,
+            max_seq_length: config.max_seq_len.unwrap_or(config.max_position_embeddings),
+            reverse_map,
             device,
         }
     }
 }
 
 /// Implement Batcher trait for Batcher struct for inference
-impl<B: Backend> dataloader::batcher::Batcher<String, BertInferenceBatch<B>> for Batcher<B> {
-    /// Batches a vector of text classification items into a training batch
-    fn batch(&self, items: Vec<String>) -> BertInferenceBatch<B> {
+impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
+    /// Collects a vector of text classification items into a inference batch
+    fn batch(&self, items: Vec<String>) -> Infer<B> {
         let batch_size = items.len();
 
         let mut token_ids_list = Vec::with_capacity(batch_size);
@@ -95,8 +105,8 @@ impl<B: Backend> dataloader::batcher::Batcher<String, BertInferenceBatch<B>> for
             &self.device,
         );
 
-        // Create and return training batch
-        BertInferenceBatch {
+        // Create and return inference batch
+        Infer {
             tokens: pad_mask.tensor,
             mask_pad: pad_mask.mask,
         }
@@ -104,20 +114,20 @@ impl<B: Backend> dataloader::batcher::Batcher<String, BertInferenceBatch<B>> for
 }
 
 /// Implement Batcher trait for Batcher struct for training
+/// TODO: Make this generic for any dataset that provides what we need
 impl<B: Backend> dataloader::batcher::Batcher<snips::Item, Train<B>> for Batcher<B> {
-    /// Batches a vector of text classification items into a training batch
+    /// Collects a vector of text classification items into a training batch
     fn batch(&self, items: Vec<snips::Item>) -> Train<B> {
         let batch_size = items.len();
 
-        let infer: BertInferenceBatch<B> =
-            self.batch(items.iter().map(|item| item.input.clone()).collect());
+        let infer: Infer<B> = self.batch(items.iter().map(|item| item.input.clone()).collect());
 
         let mut class_id_list = Vec::with_capacity(batch_size);
 
         // Tokenize text and create class_id tensor for each item
         for item in items {
             let class_id = self
-                .class_map
+                .reverse_map
                 .get(&item.intent)
                 .unwrap_or(&self.unk_token_id);
 

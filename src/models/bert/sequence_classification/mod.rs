@@ -1,16 +1,11 @@
-/// Model
+/// Bert for Sequence Classification
 pub mod model;
 
-/// Batcher
-pub mod batcher;
+/// The model configuration
+pub mod config;
 
-/// Training
-pub mod training;
+/// Use case for text classification
+pub mod text_classification;
 
-/// Inference
-pub mod inference;
-
-pub use batcher::Batcher;
-pub use inference::infer;
-pub use model::{Model, ModelRecord};
-pub use training::train;
+pub use config::Config;
+pub use model::{Model, ModelRecord, ModelRecordItem};

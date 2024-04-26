@@ -2,6 +2,9 @@ use burn::data::dataset::{self, InMemDataset};
 use derive_new::new;
 use serde::{Deserialize, Serialize};
 
+/// The name of the Snips dataset
+pub static DATASET: &str = "snips";
+
 /// Define a struct for Snips text and token classification items
 #[derive(Clone, Debug, Serialize, Deserialize, new)]
 pub struct Item {
@@ -37,23 +40,13 @@ impl dataset::Dataset<Item> for Dataset {
 // Implement methods for constructing the Snips dataset
 impl Dataset {
     /// Constructs the dataset for a mode (either "train" or "test")
-    pub async fn load(data_root: &str, mode: &str) -> std::io::Result<Self> {
-        let task_root = format!("{}/snips", data_root);
+    pub async fn load(data_dir: &str, mode: &str) -> std::io::Result<Self> {
+        let dataset_dir = format!("{}/datasets/{}", data_dir, DATASET);
         let reader = csv::ReaderBuilder::new();
 
         let dataset: InMemDataset<Item> =
-            InMemDataset::from_csv(format!("{}/{}.csv", task_root, mode), &reader)?;
+            InMemDataset::from_csv(format!("{}/{}.csv", dataset_dir, mode), &reader)?;
 
         Ok(Self { dataset })
-    }
-
-    /// Returns the training portion of the dataset
-    pub async fn train() -> std::io::Result<Self> {
-        Self::load("data", "train").await
-    }
-
-    /// Returns the testing portion of the dataset
-    pub async fn test() -> std::io::Result<Self> {
-        Self::load("data", "test").await
     }
 }

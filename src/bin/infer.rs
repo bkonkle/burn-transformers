@@ -2,7 +2,9 @@
 
 use anyhow::{anyhow, Result};
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
-use burn_transformers::{datasets::snips, models::bert::sequence_classification::infer};
+use burn_transformers::{
+    datasets::snips, models::bert::sequence_classification, pipelines::text_classification::infer,
+};
 use pico_args::Arguments;
 
 const HELP: &str = "\
@@ -14,6 +16,7 @@ Arguments:
 Options:
   -h, --help           Print help
   -m, --model          The model to use (e.g., 'bert')
+  -d, --data-dir       The path to the top-level data directory (defaults to 'data')
 ";
 
 #[derive(Debug)]
@@ -26,6 +29,9 @@ struct Args {
 
     /// The model to use
     model: Option<String>,
+
+    /// The path to the top-level data directory (defaults to 'data')
+    data_dir: Option<String>,
 }
 
 fn parse_args() -> Result<Args, pico_args::Error> {
@@ -35,6 +41,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
         help: pargs.contains(["-h", "--help"]),
         pipeline: pargs.free_from_str()?,
         model: pargs.opt_value_from_str(["-m", "--model"])?,
+        data_dir: pargs.opt_value_from_str(["-d", "--data-dir"])?,
     };
 
     Ok(args)
@@ -55,15 +62,15 @@ async fn main() -> Result<()> {
     }
 
     // TODO: Come up with a better mechanism for this as pipelines expand
-    if let Some(model) = args.model {
-        if model != "bert" {
-            return Err(anyhow!("Unsupported model: {}", model));
-        }
-    }
+    let model = args
+        .model
+        .map_or(Ok("bert-base-uncased".to_string()), |model| {
+            if model != "bert-base-uncased" {
+                return Err(anyhow!("Unsupported model: {}", model));
+            }
 
-    let data_root = "data";
-    let task_root = format!("{}/snips", data_root);
-    let artifact_dir = format!("{}/model", task_root);
+            Ok(model)
+        })?;
 
     let device = LibTorchDevice::Cuda(0);
 
@@ -99,8 +106,12 @@ async fn main() -> Result<()> {
     let input: Vec<String> = samples.iter().map(|(s, _)| (*s).to_string()).collect();
 
     // Get model predictions
-    let (predictions, config) =
-        infer::<Autodiff<LibTorch>, snips::Dataset>(device, &artifact_dir, input)?;
+    // TODO: Make this more generic
+    let (predictions, config) = infer::<
+        Autodiff<LibTorch>,
+        sequence_classification::Model<Autodiff<LibTorch>>,
+        snips::Dataset,
+    >(device, args.data_dir, &model, input)?;
 
     // Print out predictions for each sample
     for (i, (text, expected)) in samples.into_iter().enumerate() {

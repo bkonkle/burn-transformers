@@ -1,11 +1,34 @@
-# burn-transformers
+# 🔥 Burn Transformers
+
+`burn-transformers`
 
 [![Crates.io](https://img.shields.io/crates/v/burn-transformers.svg)](https://crates.io/crates/burn-transformers)
 [![Docs.rs](https://docs.rs/burn-transformers/badge.svg)](https://docs.rs/burn-transformers)
 [![CI](https://github.com/bkonkle/burn-transformers/workflows/CI/badge.svg)](https://github.com/bkonkle/burn-transformers/actions)
 [![Coverage Status](https://coveralls.io/repos/github/bkonkle/burn-transformers/badge.svg?branch=main)](https://coveralls.io/github/bkonkle/burn-transformers?branch=main)
 
-Burn Transformers
+## State-of-the-art Machine Learning for the Burn deep learning library in Rust
+
+Burn Transformers is an early-stage work-in-progress port of the [Huggingface Transformers](https://huggingface.co/docs/transformers/index) library from Python to Rust. It endeavors to provide many pretrained models to perform tasks on different modalities such as text, vision, and audio.
+
+🔥 Transformers provides APIs to quickly download and use those pretrained models on a given input, taking advantage of the great tools Huggingface has provided as part of [Candle](https://github.com/huggingface/candle) - their minimalist ML framework for Rust - and fine-tune them on your own datasets using the excellent [Burn](https://burn.dev/) deep learning library in Rust.
+
+## Features
+
+| Pipeline | Model | Status |
+| --- | --- | --- |
+| Text Classification | BERT | ✅ |
+| | RoBERTa | ❌ |
+| | ALBERT | ❌ |
+| | DistilBERT | ❌ |
+| | Others... | ❌ |
+| Token Classification | ... | ❌ |
+| Zero Shot Classification | ... | ❌ |
+| Text Generation | ... | ❌ |
+| Summarization | ... | ❌ |
+| Image / Video / Audio Classification | ... | ❌ |
+| Question Answering | ... | ❌ |
+| Others... | ... | ❌ |
 
 ## Installation
 
