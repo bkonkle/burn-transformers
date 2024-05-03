@@ -10,7 +10,7 @@ pub mod training;
 /// Inference
 pub mod inference;
 
-pub use batcher::Batcher;
+pub use batcher::{Batcher, Item};
 pub use inference::infer;
 pub use model::{Config, Model, ModelConfig};
 pub use training::train;

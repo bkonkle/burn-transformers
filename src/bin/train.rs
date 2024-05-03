@@ -22,9 +22,9 @@ Arguments:
 Options:
   -h, --help           Print help
   -m, --model          The model to use (e.g., 'bert-base-uncased')
+  -d, --data-dir       The path to the top-level data directory (defaults to 'data')
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
-  -d, --data-dir       The path to the top-level data directory (defaults to 'data')
 ";
 
 #[derive(Debug)]
@@ -74,7 +74,6 @@ async fn main() -> anyhow::Result<()> {
 
         return Ok(());
     }
-
     let args = output.unwrap();
 
     let pipeline = Pipeline::try_from(args.pipeline)?;
@@ -109,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
             training::train::<
                 Autodiff<LibTorch>,
                 sequence_classification::Model<Autodiff<LibTorch>>,
+                snips::Item,
                 snips::Dataset,
             >(
                 vec![device],

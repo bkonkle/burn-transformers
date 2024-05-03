@@ -13,6 +13,7 @@ bert-burn = { git = "https://github.com/bkonkle/burn-models", branch = "feature/
 
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1.80"
 burn = { version = "0.13", features = ["train", "tch", "metrics"] }
 bert-burn = { version = "0.2", features = ["safetensors", "tch-gpu"] }
 candle-core = { version = "0.3.2" }
