@@ -39,7 +39,7 @@ pub struct Config {
     pub adam_epsilon: f32,
 
     /// Initial learning rate
-    #[config(default = 5e-5)]
+    #[config(default = 1e-2)]
     pub learning_rate: LearningRate,
 
     /// Dropout rate
