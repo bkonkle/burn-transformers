@@ -6,9 +6,10 @@ use burn::{
     data::dataloader::Dataset as _,
 };
 use burn_transformers::{
-    datasets::{snips, Dataset, LoadableDataset},
+    cli::datasets::Dataset,
+    datasets::{snips, LoadableDataset},
     models::bert::sequence_classification,
-    pipelines::text_classification::{self, infer},
+    pipelines::text_classification::infer,
 };
 use pico_args::Arguments;
 use rand::Rng;
