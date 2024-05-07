@@ -25,6 +25,7 @@ Options:
   -d, --data-dir       The path to the top-level data directory (defaults to 'data')
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
+  -d, --data-dir       The path to the top-level data directory (defaults to 'data')
 ";
 
 #[derive(Debug)]

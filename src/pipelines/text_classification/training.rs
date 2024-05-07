@@ -78,7 +78,6 @@ where
     >,
 {
     let device = &devices[0];
-
     let artifact_dir = format!(
         "{}/pipelines/text-classification/{}",
         config.data_dir, config.model_name
