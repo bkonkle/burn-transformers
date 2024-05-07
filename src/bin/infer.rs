@@ -1,6 +1,6 @@
 //! Command line tool for training
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
     cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
@@ -55,7 +55,7 @@ impl Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     let output = Args::parse()?;
 
     if output.is_none() {
@@ -65,10 +65,10 @@ async fn main() -> Result<()> {
     }
     let args = output.unwrap();
 
-    let pipeline = Pipeline::try_from(args.pipeline)?;
+    let pipeline = Pipeline::try_from(args.pipeline.as_str())?;
 
     let model = if let Some(model) = args.model.clone() {
-        Model::try_from(model)?
+        Model::try_from(model.as_str())?
     } else {
         pipeline.default_model()
     };
@@ -83,22 +83,20 @@ async fn main() -> Result<()> {
 
     let data_dir = args.data_dir.unwrap_or_else(|| "data".to_string());
 
-    let dataset = Dataset::try_from(args.dataset)?;
+    let dataset = Dataset::try_from(args.dataset.as_str())?;
 
     match pipeline {
         Pipeline::TextClassification => {
-            handle_text_classification(&model, &dataset, &data_dir).await?;
+            handle_text_classification(&model, &dataset, &data_dir).await
         }
-    };
-
-    Ok(())
+    }
 }
 
 async fn handle_text_classification(
     model: &Model,
     dataset: &Dataset,
     data_dir: &str,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let samples = match model {
         Model::Bert(_) => match dataset {
             Dataset::Snips => snips::Dataset::get_samples(data_dir).await?,

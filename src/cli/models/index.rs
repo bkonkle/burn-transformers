@@ -31,23 +31,23 @@ impl Model {
     }
 }
 
+impl TryFrom<&str> for Model {
+    type Error = ModelError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if bert::ALL_MODELS.contains(&value) {
+            Ok(Model::Bert(value.to_string()))
+        } else {
+            Err(ModelError::Unknown(value.to_string()))
+        }
+    }
+}
+
 impl Display for Model {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Model::Bert(name) = self;
 
         write!(f, "{}", name)
-    }
-}
-
-impl TryFrom<String> for Model {
-    type Error = ModelError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if bert::ALL_MODELS.contains(&value.as_str()) {
-            Ok(Model::Bert(value))
-        } else {
-            Err(ModelError::Unknown(value))
-        }
     }
 }
 

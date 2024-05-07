@@ -23,6 +23,18 @@ impl Pipeline {
     }
 }
 
+impl TryFrom<&str> for Pipeline {
+    type Error = PipelineError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value == TEXT_CLASSIFICATION {
+            Ok(Pipeline::TextClassification)
+        } else {
+            Err(PipelineError::Unknown(value.to_string()))
+        }
+    }
+}
+
 impl Display for Pipeline {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
@@ -30,18 +42,6 @@ impl Display for Pipeline {
         };
 
         write!(f, "{}", name)
-    }
-}
-
-impl TryFrom<String> for Pipeline {
-    type Error = PipelineError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value == TEXT_CLASSIFICATION {
-            Ok(Pipeline::TextClassification)
-        } else {
-            Err(PipelineError::Unknown(value))
-        }
     }
 }
 
