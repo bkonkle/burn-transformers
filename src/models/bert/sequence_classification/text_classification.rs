@@ -123,11 +123,11 @@ impl text_classification::ModelConfig for Config {
     }
 
     /// Load a pretrained model configuration
-    async fn load_pretrained(config_file: PathBuf, dataset_dir: &str) -> anyhow::Result<Self> {
+    async fn load_pretrained(config_file: PathBuf, labels: &[String]) -> anyhow::Result<Self> {
         let bert_config = BertModelConfig::load(config_file)
             .map_err(|e| anyhow!("Unable to load Hugging Face Config file: {}", e))?;
 
-        let model_config = Config::new_for_task(bert_config, dataset_dir).await?;
+        let model_config = Config::new_with_labels(bert_config, labels)?;
 
         let n_classes = model_config.id2label.len();
         if n_classes == 0 {

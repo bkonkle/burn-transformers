@@ -52,6 +52,9 @@ pub struct Config {
 
     /// The Dataset to use (e.g., "snips")
     pub dataset_name: String,
+
+    /// Class labels for the selected dataset
+    pub labels: Vec<String>,
 }
 
 /// Define train function
@@ -157,9 +160,7 @@ where
 {
     let (config_file, model_file) = download_hf_model(&config.model_name).await;
 
-    let dataset_dir = format!("{}/datasets/{}", &config.data_dir, &config.dataset_name);
-
-    let model_config = M::Config::load_pretrained(config_file, &dataset_dir)
+    let model_config = M::Config::load_pretrained(config_file, &config.labels)
         .await
         .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
 

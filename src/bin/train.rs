@@ -95,36 +95,36 @@ async fn handle_text_classification(
     model: &Model,
     args: &Args,
 ) -> anyhow::Result<()> {
-    let mut config =
-        text_classification::training::Config::new(model.to_string(), dataset.to_string());
-
-    if let Some(num_epochs) = args.num_epochs {
-        config.num_epochs = num_epochs;
-    }
-
-    if let Some(batch_size) = args.batch_size {
-        config.batch_size = batch_size;
-    }
-
-    if let Some(data_dir) = &args.data_dir {
-        config.data_dir = data_dir.to_string();
-    }
-
-    let device = LibTorchDevice::Cuda(0);
-
     match dataset {
         Dataset::Snips => {
+            let train = snips::Dataset::load("train").await?;
+            let test = snips::Dataset::load("test").await?;
+
+            let mut config = text_classification::training::Config::new(
+                model.to_string(),
+                dataset.to_string(),
+                train.intent_labels.clone(),
+            );
+
+            if let Some(num_epochs) = args.num_epochs {
+                config.num_epochs = num_epochs;
+            }
+
+            if let Some(batch_size) = args.batch_size {
+                config.batch_size = batch_size;
+            }
+
+            if let Some(data_dir) = &args.data_dir {
+                config.data_dir = data_dir.to_string();
+            }
+
+            let device = LibTorchDevice::Cuda(0);
             text_classification::training::train::<
                 Autodiff<LibTorch>,
                 sequence_classification::Model<Autodiff<LibTorch>>,
                 snips::Item,
                 snips::Dataset,
-            >(
-                vec![device],
-                snips::Dataset::load(&config.data_dir, "train").await?,
-                snips::Dataset::load(&config.data_dir, "test").await?,
-                config,
-            )
+            >(vec![device], train, test, config)
             .await?;
         }
     }
