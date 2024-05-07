@@ -20,7 +20,7 @@ pub fn infer<B: AutodiffBackend, M: Model<B> + 'static>(
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {
-    let artifact_dir = format!("{}/pipelines/text-classification/{}", data_dir, model_name);
+    let artifact_dir = format!("{}/text-classification/{}", data_dir, model_name);
 
     // Load experiment configuration
     let config = M::Config::load(format!("{artifact_dir}/config.json").as_str())
