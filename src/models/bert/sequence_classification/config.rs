@@ -38,7 +38,7 @@ impl Config {
 
     /// Initializes a Bert model with default weights
     pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
-        let model = self.model.init(device, true);
+        let model = self.model.init(device);
 
         let n_classes = self.id2label.len();
 

@@ -82,7 +82,7 @@ where
         let output = LinearConfig::new(config.model.hidden_size, n_classes).init(device);
 
         let model = config.init(device).load_record(ModelRecord {
-            model: BertModel::from_safetensors(model_file, device, config.model, true),
+            model: BertModel::from_safetensors(model_file, device, config.model),
             output: LinearRecord {
                 weight: output.weight,
                 bias: output.bias,
@@ -124,8 +124,11 @@ impl text_classification::ModelConfig for Config {
 
     /// Load a pretrained model configuration
     async fn load_pretrained(config_file: PathBuf, labels: &[String]) -> anyhow::Result<Self> {
-        let bert_config = BertModelConfig::load(config_file)
+        let mut bert_config = BertModelConfig::load(config_file)
             .map_err(|e| anyhow!("Unable to load Hugging Face Config file: {}", e))?;
+
+        // Enable the pooling layer for sequence classification
+        bert_config.with_pooling_layer = Some(true);
 
         let model_config = Config::new_with_labels(bert_config, labels)?;
 
