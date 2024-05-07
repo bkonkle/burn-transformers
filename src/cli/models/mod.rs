@@ -1,7 +1,7 @@
-/// CLI Indexes: Base Model trait
-pub mod model;
+/// The top-level model index for CLI use
+pub mod index;
 
-/// CLI Indexes: BERT models
+/// The available BERT model variations
 pub mod bert;
 
-pub use model::Model;
+pub use index::{Model, ModelError};

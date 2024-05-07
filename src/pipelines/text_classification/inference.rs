@@ -13,9 +13,9 @@ use super::{Batcher, Model, ModelConfig};
 /// Define inference function
 pub fn infer<B: AutodiffBackend, M: Model<B> + 'static>(
     device: B::Device, // Device on which to perform computation (e.g., CPU or CUDA device)
-    data_dir: String,  // The location of the top-level data directory
+    data_dir: &str,    // The location of the top-level data directory
     model_name: &str,  // The name of the model (e.g., "bert-base-uncased")
-    samples: Vec<String>, // Text samples for inference
+    samples: Vec<&str>, // Text samples for inference
 ) -> anyhow::Result<(Tensor<B, 2>, M::Config)>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
@@ -44,8 +44,9 @@ where
     // Create model using loaded weights
     let model = config.init::<B>(&device).load_record(record);
 
-    // Run inference on the given text samples
-    let item = batcher.batch(samples.clone()); // Batch samples using the batcher
+    let samples = samples.into_iter().map(|s| s.to_string()).collect();
+    let item = batcher.batch(samples); // Batch samples using the batcher
 
+    // Run inference on the given text samples, and return the config for reference
     Ok((model.infer(item), config.clone()))
 }

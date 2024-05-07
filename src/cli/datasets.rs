@@ -11,7 +11,7 @@ impl TryFrom<String> for Dataset {
 
     /// Try to convert a string to a Dataset
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value == *snips::DATASET {
+        if value.to_lowercase() == *snips::DATASET {
             Ok(Dataset::Snips)
         } else {
             Err(Self::Error::Unknown(value))

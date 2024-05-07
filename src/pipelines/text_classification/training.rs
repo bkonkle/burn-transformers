@@ -18,10 +18,7 @@ use tokenizers::Tokenizer;
 
 use crate::utils::hugging_face::download_hf_model;
 
-use super::{
-    batcher::{Item, Train},
-    Batcher, Model, ModelConfig,
-};
+use super::{batcher::Train, Batcher, Item, Model, ModelConfig};
 
 /// Define configuration struct for the experiment
 #[derive(burn::config::Config)]

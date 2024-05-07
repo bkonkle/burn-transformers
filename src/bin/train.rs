@@ -3,12 +3,10 @@
 use anyhow::anyhow;
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
-    datasets::{snips, Dataset},
-    models::{bert::sequence_classification, Model},
-    pipelines::{
-        text_classification::training::{self, Config},
-        Pipeline,
-    },
+    cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
+    datasets::snips,
+    models::bert::sequence_classification,
+    pipelines::text_classification::training::{self, Config},
 };
 use pico_args::Arguments;
 
@@ -79,16 +77,16 @@ async fn main() -> anyhow::Result<()> {
 
     let pipeline = Pipeline::try_from(args.pipeline)?;
 
-    // TODO: Use this value to dynamically load the dataset to train with
-    let dataset = Dataset::try_from(args.dataset)?;
-
     let model = if let Some(model) = args.model.clone() {
         Model::try_from(model)?
     } else {
         pipeline.default_model()
     };
 
-    let mut config = Config::new(model.into(), dataset.into());
+    // TODO: Use this value to dynamically load the dataset to train with
+    let dataset = Dataset::try_from(args.dataset)?;
+
+    let mut config = Config::new(model.to_string(), dataset.into());
 
     if let Some(num_epochs) = args.num_epochs {
         config.num_epochs = num_epochs;

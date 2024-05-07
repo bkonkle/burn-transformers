@@ -10,16 +10,7 @@ use burn::{
 use derive_new::new;
 use tokenizers::Tokenizer;
 
-use super::ModelConfig;
-
-/// A trait for items that can be used for text classification
-pub trait Item: Send + Sync + Clone + Debug {
-    /// Returns the input text for the item
-    fn input(&self) -> String;
-
-    /// Returns the class label for the item
-    fn class_label(&self) -> String;
-}
+use super::{Item, ModelConfig};
 
 /// An inference batch for text classification
 #[derive(Debug, Clone, new)]
@@ -126,7 +117,8 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
     fn batch(&self, items: Vec<I>) -> Train<B> {
         let batch_size = items.len();
 
-        let infer: Infer<B> = self.batch(items.iter().map(|item| item.input().clone()).collect());
+        let inputs = items.iter().map(|item| item.input().to_string()).collect();
+        let infer: Infer<B> = self.batch(inputs);
 
         let mut class_id_list = Vec::with_capacity(batch_size);
 
@@ -134,7 +126,7 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
         for item in items {
             let class_id = self
                 .reverse_map
-                .get(&item.class_label())
+                .get(item.class_label())
                 .unwrap_or(&self.unk_token_id);
 
             class_id_list.push(Tensor::from_data(

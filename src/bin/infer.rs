@@ -1,18 +1,14 @@
 //! Command line tool for training
 
 use anyhow::{anyhow, Result};
-use burn::{
-    backend::{libtorch::LibTorchDevice, Autodiff, LibTorch},
-    data::dataloader::Dataset as _,
-};
+use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
-    cli::datasets::Dataset,
-    datasets::{snips, LoadableDataset},
+    cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
+    datasets::snips,
     models::bert::sequence_classification,
     pipelines::text_classification::infer,
 };
 use pico_args::Arguments;
-use rand::Rng;
 
 const HELP: &str = "\
 Usage: infer PIPELINE DATASET [OPTIONS]
@@ -69,50 +65,56 @@ async fn main() -> Result<()> {
     }
     let args = output.unwrap();
 
-    // TODO: Come up with a better mechanism for this as pipelines expand
-    if args.pipeline != "text-classification" {
-        return Err(anyhow!("Unsupported pipeline: {}", args.pipeline));
+    let pipeline = Pipeline::try_from(args.pipeline)?;
+
+    let model = if let Some(model) = args.model.clone() {
+        Model::try_from(model)?
+    } else {
+        pipeline.default_model()
+    };
+
+    if !model.is_supported(&pipeline) {
+        return Err(anyhow!(
+            "Model \"{}\" is not supported by pipeline \"{}\"",
+            model,
+            pipeline
+        ));
     }
 
     let data_dir = args.data_dir.unwrap_or_else(|| "data".to_string());
 
-    // TODO: Come up with a better mechanism for this as pipelines expand
-    let model = args
-        .model
-        .map_or(Ok("bert-base-uncased".to_string()), |model| {
-            if model != "bert-base-uncased" {
-                return Err(anyhow!("Unsupported model: {}", model));
-            }
+    let dataset = Dataset::try_from(args.dataset)?;
 
-            Ok(model)
-        })?;
+    match pipeline {
+        Pipeline::TextClassification => {
+            handle_text_classification(&model, &dataset, &data_dir).await?;
+        }
+    };
+
+    Ok(())
+}
+
+async fn handle_text_classification(
+    model: &Model,
+    dataset: &Dataset,
+    data_dir: &str,
+) -> Result<()> {
+    let samples = match model {
+        Model::Bert(_) => match dataset {
+            Dataset::Snips => snips::Dataset::get_samples(data_dir).await?,
+        },
+    };
+
+    let input: Vec<_> = samples.iter().map(|(s, _)| s.as_str()).collect();
 
     let device = LibTorchDevice::Cuda(0);
-
-    // TODO: Use this value to dynamically load the dataset to train with
-    let dataset = Dataset::try_from(args.dataset)?;
-    let data: snips::Dataset = LoadableDataset::load(&data_dir, "test").await?;
-
-    // let data = snips::Dataset::load(&data_dir, "test").await?;
-
-    let mut rng = rand::thread_rng();
-
-    let mut samples = Vec::with_capacity(10);
-    for _ in 0..10 {
-        let i = rng.gen_range(0..data.len());
-        let item = data.get(i).unwrap();
-
-        samples.push((item.input.clone(), item.intent.clone()));
-    }
-
-    let input: Vec<String> = samples.iter().map(|(s, _)| (*s).clone()).collect();
 
     // Get model predictions
     // TODO: Make this more generic
     let (predictions, config) = infer::<
         Autodiff<LibTorch>,
         sequence_classification::Model<Autodiff<LibTorch>>,
-    >(device, data_dir, &model, input)?;
+    >(device, data_dir, &model.to_string(), input)?;
 
     // Print out predictions for each sample
     for (i, (text, expected)) in samples.into_iter().enumerate() {

@@ -1,11 +1,9 @@
-use async_trait::async_trait;
-use burn::data::dataset::{self, InMemDataset};
+use burn::data::dataset::{self, Dataset as _, InMemDataset};
 use derive_new::new;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::pipelines::text_classification;
-
-use super::LoadableDataset;
 
 /// The name of the Snips dataset
 pub static DATASET: &str = "snips";
@@ -24,12 +22,12 @@ pub struct Item {
 }
 
 impl text_classification::Item for Item {
-    fn input(&self) -> String {
-        self.input.clone()
+    fn input(&self) -> &str {
+        &self.input
     }
 
-    fn class_label(&self) -> String {
-        self.intent.clone()
+    fn class_label(&self) -> &str {
+        &self.intent
     }
 }
 
@@ -52,14 +50,6 @@ impl dataset::Dataset<Item> for Dataset {
     }
 }
 
-#[async_trait]
-impl LoadableDataset<Item> for Dataset {
-    /// Load the Snips dataset
-    async fn load(data_dir: &str, mode: &str) -> std::io::Result<Self> {
-        Dataset::load(data_dir, mode).await
-    }
-}
-
 // Implement methods for constructing the Snips dataset
 impl Dataset {
     /// Constructs the dataset for a mode (either "train" or "test")
@@ -71,5 +61,22 @@ impl Dataset {
             InMemDataset::from_csv(format!("{}/{}.csv", dataset_dir, mode), &reader)?;
 
         Ok(Self { dataset })
+    }
+
+    /// Returns random samples from the dataset
+    pub async fn get_samples(data_dir: &str) -> std::io::Result<Vec<(String, String)>> {
+        let mut rng = rand::thread_rng();
+
+        let data = Self::load(data_dir, "train").await?;
+
+        let mut samples = Vec::with_capacity(10);
+        for _ in 0..10 {
+            let i = rng.gen_range(0..data.len());
+            let item = data.get(i).unwrap();
+
+            samples.push((item.input, item.intent));
+        }
+
+        Ok(samples)
     }
 }
