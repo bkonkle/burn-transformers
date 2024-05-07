@@ -8,14 +8,14 @@ homepage = "https://github.com/bkonkle/burn-transformers"
 repository = "https://github.com/bkonkle/burn-transformers"
 license = "MIT"
 
-[patch.crates-io]
-bert-burn = { git = "https://github.com/bkonkle/burn-models", branch = "feature/22-custom-bert-model-outputs", package = "bert-burn" }
-
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1.80"
 burn = { version = "0.13", features = ["train", "tch", "metrics"] }
-bert-burn = { version = "0.2", features = ["safetensors", "tch-gpu"] }
+bert-burn = { git = "https://github.com/bkonkle/burn-models", branch = "feature/22-custom-bert-model-outputs", package = "bert-burn", version = "0.2", features = [
+    "safetensors",
+    "tch-gpu",
+] }
 candle-core = { version = "0.3.2" }
 csv = "1.3.0"
 derive-new = "0.6"
