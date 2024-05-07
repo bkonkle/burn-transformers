@@ -3,12 +3,10 @@
 use anyhow::anyhow;
 use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
-    datasets::{snips, Dataset},
-    models::{bert::sequence_classification, Model},
-    pipelines::{
-        text_classification::training::{self, Config},
-        Pipeline,
-    },
+    cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
+    datasets::snips,
+    models::bert::sequence_classification,
+    pipelines::text_classification,
 };
 use pico_args::Arguments;
 
@@ -22,6 +20,7 @@ Arguments:
 Options:
   -h, --help           Print help
   -m, --model          The model to use (e.g., 'bert-base-uncased')
+  -d, --data-dir       The path to the top-level data directory (defaults to 'data')
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
   -d, --data-dir       The path to the top-level data directory (defaults to 'data')
@@ -74,48 +73,58 @@ async fn main() -> anyhow::Result<()> {
 
         return Ok(());
     }
-
     let args = output.unwrap();
 
-    let pipeline = Pipeline::try_from(args.pipeline)?;
-
-    // TODO: Use this value to dynamically load the dataset to train with
-    let dataset = Dataset::try_from(args.dataset)?;
+    let pipeline = Pipeline::try_from(args.pipeline.as_str())?;
 
     let model = if let Some(model) = args.model.clone() {
-        Model::try_from(model)?
+        Model::try_from(model.as_str())?
     } else {
         pipeline.default_model()
     };
 
-    let mut config = Config::new(model.into(), dataset.into());
-
-    if let Some(num_epochs) = args.num_epochs {
-        config.num_epochs = num_epochs;
-    }
-
-    if let Some(batch_size) = args.batch_size {
-        config.batch_size = batch_size;
-    }
-
-    if let Some(data_dir) = args.data_dir {
-        config.data_dir = data_dir;
-    }
-
-    let device = LibTorchDevice::Cuda(0);
+    let dataset = Dataset::try_from(args.dataset.as_str())?;
 
     match pipeline {
-        Pipeline::TextClassification => {
-            training::train::<
+        Pipeline::TextClassification => handle_text_classification(&dataset, &model, &args).await,
+    }
+}
+
+async fn handle_text_classification(
+    dataset: &Dataset,
+    model: &Model,
+    args: &Args,
+) -> anyhow::Result<()> {
+    match dataset {
+        Dataset::Snips => {
+            let train = snips::Dataset::load("train").await?;
+            let test = snips::Dataset::load("test").await?;
+
+            let mut config = text_classification::training::Config::new(
+                model.to_string(),
+                dataset.to_string(),
+                train.intent_labels.clone(),
+            );
+
+            if let Some(num_epochs) = args.num_epochs {
+                config.num_epochs = num_epochs;
+            }
+
+            if let Some(batch_size) = args.batch_size {
+                config.batch_size = batch_size;
+            }
+
+            if let Some(data_dir) = &args.data_dir {
+                config.data_dir = data_dir.to_string();
+            }
+
+            let device = LibTorchDevice::Cuda(0);
+            text_classification::training::train::<
                 Autodiff<LibTorch>,
                 sequence_classification::Model<Autodiff<LibTorch>>,
+                snips::Item,
                 snips::Dataset,
-            >(
-                vec![device],
-                snips::Dataset::load(&config.data_dir, "train").await?,
-                snips::Dataset::load(&config.data_dir, "test").await?,
-                config,
-            )
+            >(vec![device], train, test, config)
             .await?;
         }
     }

@@ -4,8 +4,6 @@ use bert_burn::model::BertModelConfig;
 use burn::{nn::LinearConfig, tensor::backend::Backend};
 use tokio::io;
 
-use crate::utils::files::read_file;
-
 use super::model::Model;
 
 /// The Model Configuration
@@ -22,26 +20,10 @@ pub struct Config {
 }
 
 impl Config {
-    /// Initializes a Bert model with default weights
-    pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
-        let model = self.model.init(device, true);
-
-        let n_classes = self.id2label.len();
-
-        let output = LinearConfig::new(self.model.hidden_size, n_classes).init(device);
-
-        Model {
-            model,
-            output,
-            n_classes,
-        }
-    }
-
     /// Load configuration from file for training a particular task
-    pub async fn new_for_task(model: BertModelConfig, dataset_dir: &str) -> io::Result<Self> {
-        let id2label = read_file(&format!("{}/intent_labels.txt", dataset_dir))
-            .await?
-            .into_iter()
+    pub fn new_with_labels(model: BertModelConfig, labels: &[String]) -> io::Result<Self> {
+        let id2label = labels
+            .iter()
             .enumerate()
             .map(|(i, s)| (i, s.trim().to_string()))
             .collect::<HashMap<_, _>>();
@@ -52,5 +34,20 @@ impl Config {
             .collect::<HashMap<_, _>>();
 
         Ok(Config::new(model, id2label, label2id))
+    }
+
+    /// Initializes a Bert model with default weights
+    pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
+        let model = self.model.init(device);
+
+        let n_classes = self.id2label.len();
+
+        let output = LinearConfig::new(self.model.hidden_size, n_classes).init(device);
+
+        Model {
+            model,
+            output,
+            n_classes,
+        }
     }
 }

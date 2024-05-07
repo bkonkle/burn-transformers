@@ -66,7 +66,7 @@ pub trait ModelConfig: burn::config::Config + Clone {
     /// Load a pretrained model configuration
     fn load_pretrained(
         config_file: PathBuf,
-        dataset_dir: &str,
+        labels: &[String],
     ) -> impl std::future::Future<Output = anyhow::Result<Self>> + Send;
 
     /// Return the Config needed for the text classification pipeline

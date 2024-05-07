@@ -16,12 +16,9 @@ use burn::{
 };
 use tokenizers::Tokenizer;
 
-use crate::{datasets::snips, utils::hugging_face::download_hf_model};
+use crate::utils::hugging_face::download_hf_model;
 
-use super::{
-    batcher::Train,
-    Batcher, {Model, ModelConfig},
-};
+use super::{batcher::Train, Batcher, Item, Model, ModelConfig};
 
 /// Define configuration struct for the experiment
 #[derive(burn::config::Config)]
@@ -39,7 +36,7 @@ pub struct Config {
     pub adam_epsilon: f32,
 
     /// Initial learning rate
-    #[config(default = 5e-5)]
+    #[config(default = 1e-2)]
     pub learning_rate: LearningRate,
 
     /// Dropout rate
@@ -55,10 +52,13 @@ pub struct Config {
 
     /// The Dataset to use (e.g., "snips")
     pub dataset_name: String,
+
+    /// Class labels for the selected dataset
+    pub labels: Vec<String>,
 }
 
 /// Define train function
-pub async fn train<B, M, D>(
+pub async fn train<B, M, I, D>(
     devices: Vec<B::Device>, // Device on which to perform computation (e.g., CPU or CUDA device)
     dataset_train: D,        // Training dataset
     dataset_test: D,         // Testing dataset
@@ -67,7 +67,8 @@ pub async fn train<B, M, D>(
 where
     B: AutodiffBackend,
     M: Model<B> + 'static,
-    D: Dataset<snips::Item> + 'static,
+    I: Item + 'static,
+    D: Dataset<I> + 'static,
 
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 
@@ -77,17 +78,12 @@ where
     >,
 {
     let device = &devices[0];
-    let dataset_dir = format!("{}/datasets/{}", config.data_dir, config.dataset_name);
     let artifact_dir = format!(
-        "{}/pipelines/text-classification/{}",
+        "{}/text-classification/{}",
         config.data_dir, config.model_name
     );
 
-    let (config_file, model_file) = download_hf_model(&config.model_name).await;
-
-    let model_config = M::Config::load_pretrained(config_file, &dataset_dir)
-        .await
-        .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
+    let (model_config, model_file) = get_model_config::<B, M>(&config).await?;
 
     let model = M::load_from_safetensors(device, model_file, model_config.clone())?;
 
@@ -150,4 +146,23 @@ where
         .unwrap();
 
     Ok(())
+}
+
+/// Get the model configuration from the given dataset directory
+pub async fn get_model_config<B, M>(
+    config: &Config,
+) -> anyhow::Result<(<M as Model<B>>::Config, std::path::PathBuf)>
+where
+    B: AutodiffBackend,
+    M: Model<B> + 'static,
+
+    i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
+{
+    let (config_file, model_file) = download_hf_model(&config.model_name).await;
+
+    let model_config = M::Config::load_pretrained(config_file, &config.labels)
+        .await
+        .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
+
+    Ok((model_config, model_file))
 }

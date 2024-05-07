@@ -21,12 +21,6 @@ use crate::pipelines::text_classification::{self, batcher};
 
 use super::{Config, Model, ModelRecord};
 
-/// Available models to use with Bert for Text Classification
-pub static MODELS: &[&str] = &["bert-base-cased", "bert-base-uncased"];
-
-/// The default model to use
-pub static DEFAULT_MODEL: &str = "bert-base-uncased";
-
 /// Define training step
 impl<B: AutodiffBackend> TrainStep<batcher::Train<B>, ClassificationOutput<B>> for Model<B>
 where
@@ -88,7 +82,7 @@ where
         let output = LinearConfig::new(config.model.hidden_size, n_classes).init(device);
 
         let model = config.init(device).load_record(ModelRecord {
-            model: BertModel::from_safetensors(model_file, device, config.model, true),
+            model: BertModel::from_safetensors(model_file, device, config.model),
             output: LinearRecord {
                 weight: output.weight,
                 bias: output.bias,
@@ -129,11 +123,14 @@ impl text_classification::ModelConfig for Config {
     }
 
     /// Load a pretrained model configuration
-    async fn load_pretrained(config_file: PathBuf, dataset_dir: &str) -> anyhow::Result<Self> {
-        let bert_config = BertModelConfig::load(config_file)
+    async fn load_pretrained(config_file: PathBuf, labels: &[String]) -> anyhow::Result<Self> {
+        let mut bert_config = BertModelConfig::load(config_file)
             .map_err(|e| anyhow!("Unable to load Hugging Face Config file: {}", e))?;
 
-        let model_config = Config::new_for_task(bert_config, dataset_dir).await?;
+        // Enable the pooling layer for sequence classification
+        bert_config.with_pooling_layer = Some(true);
+
+        let model_config = Config::new_with_labels(bert_config, labels)?;
 
         let n_classes = model_config.id2label.len();
         if n_classes == 0 {

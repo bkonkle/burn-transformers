@@ -1,6 +1,6 @@
 [package]
 name = "burn-transformers"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Brandon Konkle <brandon@konkle.us>"]
 edition = "2021"
 description = "A WIP port of the HuggingFace Transformers library for the Burn deep learning framework"
@@ -9,18 +9,13 @@ repository = "https://github.com/bkonkle/burn-transformers"
 license = "MIT"
 
 [patch.crates-io]
-burn = { path = "../burn/crates/burn" }
-
-[patch."https://github.com/bkonkle/burn-models"]
-bert-burn = { path = "../burn-models/bert-burn" }
+bert-burn = { git = "https://github.com/bkonkle/burn-models", branch = "feature/22-custom-bert-model-outputs", package = "bert-burn" }
 
 [dependencies]
 anyhow = "1.0"
-burn = { version = "0.13", features = ["train", "cuda", "tch", "metrics"] }
-bert-burn = { git = "https://github.com/bkonkle/burn-models", branch = "feature/22-custom-bert-model-outputs", package = "bert-burn", features = [
-    "safetensors",
-    "tch-gpu",
-] }
+async-trait = "0.1.80"
+burn = { version = "0.13", features = ["train", "tch", "metrics"] }
+bert-burn = { version = "0.2", features = ["safetensors", "tch-gpu"] }
 candle-core = { version = "0.3.2" }
 csv = "1.3.0"
 derive-new = "0.6"

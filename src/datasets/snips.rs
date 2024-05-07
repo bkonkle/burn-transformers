@@ -1,6 +1,10 @@
-use burn::data::dataset::{self, InMemDataset};
+use burn::data::dataset::{self, Dataset as _, InMemDataset};
 use derive_new::new;
+use hf_hub::api::tokio;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
+
+use crate::{pipelines::text_classification, utils::files::read_file};
 
 /// The name of the Snips dataset
 pub static DATASET: &str = "snips";
@@ -18,10 +22,26 @@ pub struct Item {
     pub slots: String,
 }
 
+impl text_classification::Item for Item {
+    fn input(&self) -> &str {
+        &self.input
+    }
+
+    fn class_label(&self) -> &str {
+        &self.intent
+    }
+}
+
 /// Struct for the Snips dataset
 pub struct Dataset {
     /// Underlying In-Memory dataset
     dataset: InMemDataset<Item>,
+
+    /// Intent labels
+    pub intent_labels: Vec<String>,
+
+    /// Slot labels
+    pub slot_labels: Vec<String>,
 }
 
 /// Implement the Dataset trait for the Snips dataset
@@ -40,13 +60,51 @@ impl dataset::Dataset<Item> for Dataset {
 // Implement methods for constructing the Snips dataset
 impl Dataset {
     /// Constructs the dataset for a mode (either "train" or "test")
-    pub async fn load(data_dir: &str, mode: &str) -> std::io::Result<Self> {
-        let dataset_dir = format!("{}/datasets/{}", data_dir, DATASET);
-        let reader = csv::ReaderBuilder::new();
+    pub async fn load(mode: &str) -> anyhow::Result<Self> {
+        let api = tokio::Api::new().unwrap();
+        let repo = api.dataset("bkonkle/snips-joint-intent".to_string());
 
+        let dataset_file = repo.get(&format!("{}.csv", mode)).await?;
         let dataset: InMemDataset<Item> =
-            InMemDataset::from_csv(format!("{}/{}.csv", dataset_dir, mode), &reader)?;
+            InMemDataset::from_csv(dataset_file, &csv::ReaderBuilder::new())?;
 
-        Ok(Self { dataset })
+        let intent_labels_file = repo.get("intent_labels.txt").await?;
+        let intent_labels = read_file(
+            intent_labels_file
+                .to_str()
+                .expect("unable to read intent_labels.txt path"),
+        )
+        .await?;
+
+        let slot_labels_file = repo.get("slot_labels.txt").await?;
+        let slot_labels = read_file(
+            slot_labels_file
+                .to_str()
+                .expect("unable to read slot_labels.txt path"),
+        )
+        .await?;
+
+        Ok(Self {
+            dataset,
+            intent_labels,
+            slot_labels,
+        })
+    }
+
+    /// Returns random samples from the dataset
+    pub async fn get_samples(mode: &str) -> anyhow::Result<Vec<(String, String)>> {
+        let mut rng = rand::thread_rng();
+
+        let data = Self::load(mode).await?;
+
+        let mut samples = Vec::with_capacity(10);
+        for _ in 0..10 {
+            let i = rng.gen_range(0..data.len());
+            let item = data.get(i).unwrap();
+
+            samples.push((item.input, item.intent));
+        }
+
+        Ok(samples)
     }
 }
