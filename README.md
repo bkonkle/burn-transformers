@@ -37,8 +37,16 @@ NOTE: This library is in early development, and the API may shift rapidly as it 
 
 ### Cargo
 
-- Install Rust and Cargo by following [this guide](https://www.rust-lang.org/tools/install).
-- Run `cargo install burn-transformers`
+Install Rust and Cargo by following [this guide](https://www.rust-lang.org/tools/install).
+
+Add this to your Cargo.toml:
+
+```toml
+    [dependencies]
+    bert-transformers = { git = "<https://github.com/bkonkle/burn-transformers>" }
+```
+
+Once `bert-burn` is published to crates.io, this project will be able to be published there as well.
 
 ## Development
 
