@@ -35,7 +35,7 @@ serde_json = "1.0"
 serde_yaml = "0.9.11"
 tch = { version = "0.15" }
 thiserror = "1.0.59"
-tokenizers = { version = "0.15.0", features = [
+tokenizers = { version = "0.19.1", features = [
     "onig",
     "http",
 ], default-features = false }
