@@ -6,7 +6,7 @@ use burn_transformers::{
     cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
     datasets::snips,
     models::bert::sequence_classification,
-    pipelines::text_classification::infer,
+    pipelines::sequence_classification::text_classification,
 };
 use pico_args::Arguments;
 
@@ -109,7 +109,7 @@ async fn handle_text_classification(
 
     // Get model predictions
     // TODO: Make this more generic
-    let (predictions, config) = infer::<
+    let (predictions, config) = text_classification::infer::<
         Autodiff<LibTorch>,
         sequence_classification::Model<Autodiff<LibTorch>>,
     >(device, data_dir, &model.to_string(), input)?;

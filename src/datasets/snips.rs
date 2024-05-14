@@ -4,7 +4,10 @@ use hf_hub::api::tokio;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{pipelines::text_classification, utils::files::read_file};
+use crate::{
+    pipelines::sequence_classification::{text_classification, token_classification},
+    utils::files::read_file,
+};
 
 /// The name of the Snips dataset
 pub static DATASET: &str = "snips";
@@ -29,6 +32,16 @@ impl text_classification::Item for Item {
 
     fn class_label(&self) -> &str {
         &self.intent
+    }
+}
+
+impl token_classification::Item for Item {
+    fn input(&self) -> &str {
+        &self.input
+    }
+
+    fn class_labels(&self) -> Vec<&str> {
+        self.slots.split_whitespace().collect()
     }
 }
 

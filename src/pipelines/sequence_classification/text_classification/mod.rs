@@ -16,5 +16,5 @@ pub mod inference;
 pub use batcher::Batcher;
 pub use inference::infer;
 pub use item::Item;
-pub use model::{Config, Model, ModelConfig};
+pub use model::{Model, ModelConfig};
 pub use training::train;

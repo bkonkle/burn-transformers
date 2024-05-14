@@ -5,18 +5,19 @@ use std::{collections::HashMap, fmt::Debug};
 use burn::{
     data::dataloader,
     nn::attention::generate_padding_mask,
-    tensor::{backend::Backend, Bool, Data, ElementConversion, Int, Tensor},
+    tensor::{backend::Backend, Bool, Int, Tensor},
 };
 use derive_new::new;
 use tokenizers::Tokenizer;
 
-use super::{Item, ModelConfig};
+use crate::pipelines::sequence_classification;
 
 /// An inference batch for text classification
 #[derive(Debug, Clone, new)]
 pub struct Infer<B: Backend> {
     /// Tokenized text as 2D tensor: [batch_size, max_seq_length]
     pub tokens: Tensor<B, 2, Int>,
+
     /// Padding mask for the tokenized text containing booleans for padding locations
     pub mask_pad: Tensor<B, 2, Bool>,
 }
@@ -55,9 +56,11 @@ pub struct Batcher<B: Backend> {
 
 impl<B: Backend> Batcher<B> {
     /// Creates a new batcher
-    pub fn new<C: ModelConfig>(tokenizer: Tokenizer, config: C, device: B::Device) -> Self {
-        let config = config.get_config();
-
+    pub fn new(
+        tokenizer: Tokenizer,
+        config: sequence_classification::Config,
+        device: B::Device,
+    ) -> Self {
         let reverse_map = config.label2id;
 
         let unk_token_id = reverse_map
@@ -107,40 +110,6 @@ impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
         Infer {
             tokens: pad_mask.tensor,
             mask_pad: pad_mask.mask,
-        }
-    }
-}
-
-/// Implement Batcher trait for Batcher struct for training
-impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<B> {
-    /// Collects a vector of text classification items into a training batch
-    fn batch(&self, items: Vec<I>) -> Train<B> {
-        let batch_size = items.len();
-
-        let inputs = items.iter().map(|item| item.input().to_string()).collect();
-        let infer: Infer<B> = self.batch(inputs);
-
-        let mut class_id_list = Vec::with_capacity(batch_size);
-
-        // Tokenize text and create class_id tensor for each item
-        for item in items {
-            let class_id = self
-                .reverse_map
-                .get(item.class_label())
-                .unwrap_or(&self.unk_token_id);
-
-            class_id_list.push(Tensor::from_data(
-                Data::from([(*class_id as i64).elem()]),
-                &self.device,
-            ));
-        }
-
-        let targets = Tensor::cat(class_id_list, 0);
-
-        // Create and return training batch
-        Train {
-            input: infer,
-            targets,
         }
     }
 }

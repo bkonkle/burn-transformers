@@ -6,7 +6,7 @@ use burn_transformers::{
     cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
     datasets::snips,
     models::bert::sequence_classification,
-    pipelines::text_classification,
+    pipelines::sequence_classification::text_classification,
 };
 use pico_args::Arguments;
 
@@ -119,7 +119,7 @@ async fn handle_text_classification(
             }
 
             let device = LibTorchDevice::Cuda(0);
-            text_classification::training::train::<
+            text_classification::train::<
                 Autodiff<LibTorch>,
                 sequence_classification::Model<Autodiff<LibTorch>>,
                 snips::Item,

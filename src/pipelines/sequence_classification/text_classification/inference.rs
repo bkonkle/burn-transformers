@@ -23,7 +23,7 @@ where
     let artifact_dir = format!("{}/text-classification/{}", data_dir, model_name);
 
     // Load experiment configuration
-    let config = M::Config::load(format!("{artifact_dir}/config.json").as_str())
+    let model_config = M::Config::load(format!("{artifact_dir}/config.json").as_str())
         .map_err(|e| anyhow!("Unable to load config file: {}", e))?;
 
     // Initialize tokenizer
@@ -32,7 +32,7 @@ where
     // Initialize batcher for batching samples
     let batcher = Arc::new(Batcher::<B>::new(
         tokenizer.clone(),
-        config.clone(),
+        model_config.get_config(),
         device.clone(),
     ));
 
@@ -42,11 +42,11 @@ where
         .map_err(|e| anyhow!("Unable to load trained model weights: {}", e))?;
 
     // Create model using loaded weights
-    let model = config.init::<B>(&device).load_record(record);
+    let model = model_config.init::<B>(&device).load_record(record);
 
     let samples = samples.into_iter().map(|s| s.to_string()).collect();
     let item = batcher.batch(samples); // Batch samples using the batcher
 
     // Run inference on the given text samples, and return the config for reference
-    Ok((model.infer(item), config.clone()))
+    Ok((model.infer(item), model_config.clone()))
 }

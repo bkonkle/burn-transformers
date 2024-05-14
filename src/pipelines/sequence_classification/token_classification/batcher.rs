@@ -9,7 +9,7 @@ use burn::{
 use derive_new::new;
 use tokenizers::Tokenizer;
 
-use crate::{pipelines::text_classification, utils::tensors};
+use crate::{pipelines::sequence_classification, utils::tensors};
 
 use super::Item;
 
@@ -17,7 +17,7 @@ use super::Item;
 #[derive(Clone, Debug, new)]
 pub struct Train<B: Backend> {
     /// Bert Model input
-    pub input: text_classification::batcher::Infer<B>,
+    pub input: sequence_classification::batcher::Infer<B>,
 
     /// Class ids for the batch
     pub targets: Tensor<B, 2, Int>,
@@ -27,28 +27,28 @@ pub struct Train<B: Backend> {
 #[derive(Clone)]
 pub struct Batcher<B: Backend> {
     /// Wrap the Text Classification batcher because Token Classification is a variation
-    batcher: text_classification::Batcher<B>,
+    batcher: sequence_classification::Batcher<B>,
 }
 
 impl<B: Backend> Batcher<B> {
     /// Creates a new batcher
-    pub fn new<C: text_classification::ModelConfig>(
+    pub fn new(
         tokenizer: Tokenizer,
-        config: C,
+        config: sequence_classification::Config,
         device: B::Device,
     ) -> Self {
-        let batcher = text_classification::Batcher::new(tokenizer, config, device);
+        let batcher = sequence_classification::Batcher::new(tokenizer, config, device);
 
         Self { batcher }
     }
 }
 
 /// Implement Batcher trait for Batcher struct for inference
-impl<B: Backend> dataloader::batcher::Batcher<String, text_classification::batcher::Infer<B>>
+impl<B: Backend> dataloader::batcher::Batcher<String, sequence_classification::batcher::Infer<B>>
     for Batcher<B>
 {
     /// Collects a vector of text classification items into a inference batch
-    fn batch(&self, items: Vec<String>) -> text_classification::batcher::Infer<B> {
+    fn batch(&self, items: Vec<String>) -> sequence_classification::batcher::Infer<B> {
         self.batcher.batch(items)
     }
 }
@@ -60,7 +60,7 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
         let batch_size = items.len();
 
         let inputs = items.iter().map(|item| item.input().to_string()).collect();
-        let infer: text_classification::batcher::Infer<B> = self.batch(inputs);
+        let infer: sequence_classification::batcher::Infer<B> = self.batch(inputs);
 
         let seq_length = infer.tokens.dims()[1];
 

@@ -17,7 +17,10 @@ use burn::{
     train::{ClassificationOutput, TrainOutput, TrainStep, ValidStep},
 };
 
-use crate::pipelines::text_classification::{self, batcher};
+use crate::pipelines::sequence_classification::{
+    self,
+    text_classification::{self, batcher},
+};
 
 use super::{Config, Model, ModelRecord};
 
@@ -105,7 +108,7 @@ where
     }
 
     /// Defines forward pass for inference
-    fn infer(&self, input: batcher::Infer<B>) -> Tensor<B, 2> {
+    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 2> {
         self.infer(BertInferenceBatch {
             tokens: input.tokens,
             mask_pad: input.mask_pad,
@@ -142,8 +145,8 @@ impl text_classification::ModelConfig for Config {
         Ok(model_config)
     }
 
-    fn get_config(&self) -> text_classification::Config {
-        text_classification::Config {
+    fn get_config(&self) -> sequence_classification::Config {
+        sequence_classification::Config {
             pad_token_id: self.model.pad_token_id,
             max_position_embeddings: self.model.max_position_embeddings,
             hidden_size: self.model.hidden_size,
