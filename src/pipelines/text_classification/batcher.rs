@@ -38,19 +38,19 @@ pub struct Batcher<B: Backend> {
     tokenizer: Tokenizer,
 
     /// Maximum sequence length for tokenized text
-    max_seq_length: usize,
+    pub max_seq_length: usize,
 
     /// ID of the padding token
-    pad_token_id: usize,
+    pub pad_token_id: usize,
 
     /// ID of the UNK token
-    unk_token_id: usize,
+    pub unk_token_id: usize,
 
     /// A reverse map from class names to their corresponding ids
-    reverse_map: HashMap<String, usize>,
+    pub reverse_map: HashMap<String, usize>,
 
     /// Device on which to perform computation (e.g., CPU or CUDA device)
-    device: B::Device,
+    pub device: B::Device,
 }
 
 impl<B: Backend> Batcher<B> {

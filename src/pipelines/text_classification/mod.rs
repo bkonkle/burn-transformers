@@ -1,16 +1,16 @@
 /// Common model config and traits for text classification
 pub mod model;
 
-/// Batcher
+/// Text Classification Batcher
 pub mod batcher;
 
 /// Text Classification Items
 pub mod item;
 
-/// Training
+/// Text Classification Training
 pub mod training;
 
-/// Inference
+/// Text Classification Inference
 pub mod inference;
 
 pub use batcher::Batcher;
