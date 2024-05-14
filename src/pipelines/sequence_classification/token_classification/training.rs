@@ -9,8 +9,8 @@ use burn::{
     record::{CompactRecorder, Recorder},
     tensor::backend::AutodiffBackend,
     train::{
-        metric::{AccuracyMetric, CudaMetric, HammingScore, LearningRateMetric, LossMetric},
-        ClassificationOutput, LearnerBuilder, ValidStep,
+        metric::{CudaMetric, HammingScore, LearningRateMetric, LossMetric},
+        LearnerBuilder, MultiLabelClassificationOutput, ValidStep,
     },
 };
 use tokenizers::Tokenizer;
@@ -39,7 +39,7 @@ where
 
     M::InnerModule: ValidStep<
         Train<<B as AutodiffBackend>::InnerBackend>,
-        ClassificationOutput<<B as AutodiffBackend>::InnerBackend>,
+        MultiLabelClassificationOutput<<B as AutodiffBackend>::InnerBackend>,
     >,
 {
     let device = &devices[0];
@@ -90,7 +90,7 @@ where
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
         .metric_train_numeric(HammingScore::new())
-        .metric_valid_numeric(AccuracyMetric::new())
+        .metric_valid_numeric(HammingScore::new())
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
         .metric_train_numeric(LearningRateMetric::new())

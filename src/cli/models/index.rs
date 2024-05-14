@@ -26,6 +26,9 @@ impl Model {
                 Pipeline::TextClassification => {
                     bert::TEXT_CLASSIFICATION_MODELS.contains(&model_name.as_str())
                 }
+                Pipeline::TokenClassification => {
+                    bert::TOKEN_CLASSIFICATION_MODELS.contains(&model_name.as_str())
+                }
             },
         }
     }

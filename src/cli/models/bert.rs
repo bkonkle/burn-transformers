@@ -19,5 +19,14 @@ pub static ALL_MODELS: &[&str; 2] = &[BASE_UNCASED, BASE_CASED];
 /// Available models to use with Bert for Text Classification
 pub static TEXT_CLASSIFICATION_MODELS: &[&str; 2] = &[BASE_UNCASED, BASE_CASED];
 
-/// The default model to use
+/// The default model to use for Text Classification
 pub static DEFAULT_TEXT_CLASSIFICATION_MODEL: &str = BASE_UNCASED;
+
+/// Token Classification
+/// -------------------
+
+/// Available models to use with Bert for Token Classification
+pub static TOKEN_CLASSIFICATION_MODELS: &[&str; 2] = &[BASE_UNCASED, BASE_CASED];
+
+/// The default model to use for Token Classification
+pub static DEFAULT_TOKEN_CLASSIFICATION_MODEL: &str = BASE_UNCASED;
