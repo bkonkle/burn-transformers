@@ -3,16 +3,18 @@ use std::{fmt::Display, path::PathBuf};
 use burn::{
     module::AutodiffModule,
     tensor::{backend::AutodiffBackend, Tensor},
-    train::{MultiLabelClassificationOutput, TrainStep},
+    train::TrainStep,
 };
 
 use crate::pipelines::sequence_classification;
 
-use super::batcher::{self, Train};
+use super::{
+    batcher::{self, Train},
+    Output,
+};
 
 /// A trait for models that can be used for Text Classification
-pub trait Model<B>:
-    AutodiffModule<B> + TrainStep<Train<B>, MultiLabelClassificationOutput<B>> + Display
+pub trait Model<B>: AutodiffModule<B> + TrainStep<Train<B>, Output<B>> + Display
 where
     B: AutodiffBackend,
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
@@ -21,7 +23,7 @@ where
     type Config: ModelConfig;
 
     /// Perform a forward pass
-    fn forward(&self, item: batcher::Train<B>) -> MultiLabelClassificationOutput<B>;
+    fn forward(&self, item: batcher::Train<B>) -> Output<B>;
 
     /// Defines forward pass for inference
     fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 2>;

@@ -12,13 +12,15 @@ use burn::{
         backend::{AutodiffBackend, Backend},
         Int, Tensor,
     },
-    train::MultiLabelClassificationOutput,
 };
 use derive_new::new;
 
 use crate::{
     models::bert::token_classification::Config,
-    pipelines::sequence_classification::{self, token_classification},
+    pipelines::sequence_classification::{
+        self,
+        token_classification::{self, Output},
+    },
 };
 
 /// BERT for sequence Classification
@@ -37,11 +39,7 @@ pub struct Model<B: Backend> {
 /// Define model behavior
 impl<B: Backend> Model<B> {
     /// Defines forward pass for training
-    pub fn forward(
-        &self,
-        input: BertInferenceBatch<B>,
-        targets: Tensor<B, 2, Int>,
-    ) -> MultiLabelClassificationOutput<B>
+    pub fn forward(&self, input: BertInferenceBatch<B>, targets: Tensor<B, 2, Int>) -> Output<B>
     where
         i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
     {
@@ -56,7 +54,7 @@ impl<B: Backend> Model<B> {
             .output
             .forward(hidden_states)
             .slice([0..batch_size, 0..seq_length])
-            .reshape([batch_size, seq_length]);
+            .reshape([batch_size, seq_length, self.n_classes]);
 
         let loss = CrossEntropyLossConfig::new()
             .with_pad_tokens(Some(vec![self.model.embeddings.pad_token_idx]))
@@ -69,7 +67,7 @@ impl<B: Backend> Model<B> {
                 targets.clone().reshape([batch_size * seq_length]),
             );
 
-        MultiLabelClassificationOutput {
+        Output {
             loss,
             output,
             targets,
@@ -133,10 +131,7 @@ where
     }
 
     /// Perform a forward pass
-    fn forward(
-        &self,
-        item: token_classification::batcher::Train<B>,
-    ) -> MultiLabelClassificationOutput<B> {
+    fn forward(&self, item: token_classification::batcher::Train<B>) -> Output<B> {
         self.forward(
             BertInferenceBatch {
                 tokens: item.input.tokens,

@@ -9,15 +9,15 @@ use burn::{
     record::{CompactRecorder, Recorder},
     tensor::backend::AutodiffBackend,
     train::{
-        metric::{CudaMetric, HammingScore, LearningRateMetric, LossMetric},
-        LearnerBuilder, MultiLabelClassificationOutput, ValidStep,
+        metric::{CudaMetric, LearningRateMetric, LossMetric},
+        LearnerBuilder, ValidStep,
     },
 };
 use tokenizers::Tokenizer;
 
 use crate::{pipelines::sequence_classification, utils::hugging_face::download_hf_model};
 
-use super::{batcher::Train, Batcher, Item, Model, ModelConfig};
+use super::{batcher::Train, Batcher, Item, Model, ModelConfig, Output};
 
 /// Training Config
 pub type Config = sequence_classification::config::Training;
@@ -39,7 +39,7 @@ where
 
     M::InnerModule: ValidStep<
         Train<<B as AutodiffBackend>::InnerBackend>,
-        MultiLabelClassificationOutput<<B as AutodiffBackend>::InnerBackend>,
+        Output<<B as AutodiffBackend>::InnerBackend>,
     >,
 {
     let device = &devices[0];
@@ -89,8 +89,8 @@ where
     let learner = LearnerBuilder::new(&artifact_dir)
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
-        .metric_train_numeric(HammingScore::new())
-        .metric_valid_numeric(HammingScore::new())
+        // .metric_train_numeric(HammingScore::new())
+        // .metric_valid_numeric(HammingScore::new())
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
         .metric_train_numeric(LearningRateMetric::new())

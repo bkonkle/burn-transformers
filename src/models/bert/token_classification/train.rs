@@ -1,20 +1,19 @@
 use bert_burn::data::BertInferenceBatch;
 use burn::{
     tensor::backend::{AutodiffBackend, Backend},
-    train::{MultiLabelClassificationOutput, TrainOutput, TrainStep, ValidStep},
+    train::{TrainOutput, TrainStep, ValidStep},
 };
 
-use crate::pipelines::sequence_classification::token_classification::batcher;
+use crate::pipelines::sequence_classification::token_classification::{batcher, Output};
 
 use super::Model;
 
 /// Define training step
-impl<B: AutodiffBackend> TrainStep<batcher::Train<B>, MultiLabelClassificationOutput<B>>
-    for Model<B>
+impl<B: AutodiffBackend> TrainStep<batcher::Train<B>, Output<B>> for Model<B>
 where
     i64: From<<B as Backend>::IntElem>,
 {
-    fn step(&self, item: batcher::Train<B>) -> TrainOutput<MultiLabelClassificationOutput<B>> {
+    fn step(&self, item: batcher::Train<B>) -> TrainOutput<Output<B>> {
         // Run forward pass, calculate gradients and return them along with the output
         let output = self.forward(
             BertInferenceBatch {
@@ -30,11 +29,11 @@ where
 }
 
 /// Define validation step
-impl<B: Backend> ValidStep<batcher::Train<B>, MultiLabelClassificationOutput<B>> for Model<B>
+impl<B: Backend> ValidStep<batcher::Train<B>, Output<B>> for Model<B>
 where
     i64: From<<B as Backend>::IntElem>,
 {
-    fn step(&self, item: batcher::Train<B>) -> MultiLabelClassificationOutput<B> {
+    fn step(&self, item: batcher::Train<B>) -> Output<B> {
         // Run forward pass and return the output
         self.forward(
             BertInferenceBatch {
