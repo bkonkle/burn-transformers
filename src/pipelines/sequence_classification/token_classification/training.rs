@@ -15,7 +15,10 @@ use burn::{
 };
 use tokenizers::Tokenizer;
 
-use crate::{pipelines::sequence_classification, utils::hugging_face::download_hf_model};
+use crate::{
+    pipelines::sequence_classification,
+    utils::{hugging_face::download_hf_model, renderer},
+};
 
 use super::{batcher::Train, Batcher, Item, Model, ModelConfig, Output};
 
@@ -28,6 +31,7 @@ pub async fn train<B, M, I, D>(
     dataset_train: D,        // Training dataset
     dataset_test: D,         // Testing dataset
     config: Config,          // Experiment configuration
+    use_tui: bool,           // Whether to use TUI or not
 ) -> anyhow::Result<()>
 where
     B: AutodiffBackend,
@@ -86,7 +90,7 @@ where
         .init();
 
     // Initialize learner
-    let learner = LearnerBuilder::new(&artifact_dir)
+    let mut learner = LearnerBuilder::new(&artifact_dir)
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
         // .metric_train_numeric(HammingScore::new())
@@ -97,8 +101,13 @@ where
         .with_file_checkpointer(CompactRecorder::new())
         .devices(devices)
         .num_epochs(config.num_epochs)
-        .summary()
-        .build(model, optimizer, lr_scheduler);
+        .summary();
+
+    if !use_tui {
+        learner = learner.renderer(renderer::Simple::new());
+    }
+
+    let learner = learner.build(model, optimizer, lr_scheduler);
 
     // Train the model
     let model_trained = learner.fit(dataloader_train, dataloader_test);

@@ -24,6 +24,7 @@ Options:
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
   -d, --data-dir       The path to the top-level data directory (defaults to 'data')
+  --no-tui             Disable TUI
 ";
 
 #[derive(Debug)]
@@ -34,6 +35,7 @@ struct Args {
     num_epochs: Option<usize>,
     batch_size: Option<usize>,
     data_dir: Option<String>,
+    use_tui: bool,
 }
 
 impl Args {
@@ -58,6 +60,7 @@ impl Args {
                 pico_args::Error::MissingArgument => anyhow!("Missing required argument: DATASET"),
                 _ => anyhow!("{}", e),
             })?,
+            use_tui: !(pargs.contains("--no-tui")),
         };
 
         Ok(Some(args))
@@ -146,7 +149,7 @@ async fn handle_token_classification(
             let mut config = sequence_classification::token_classification::training::Config::new(
                 model.to_string(),
                 dataset.to_string(),
-                train.intent_labels.clone(),
+                train.slot_labels.clone(),
             );
 
             if let Some(num_epochs) = args.num_epochs {
@@ -167,7 +170,7 @@ async fn handle_token_classification(
                 bert::token_classification::Model<Autodiff<LibTorch>>,
                 snips::Item,
                 snips::Dataset,
-            >(vec![device], train, test, config)
+            >(vec![device], train, test, config, args.use_tui)
             .await?;
         }
     }
