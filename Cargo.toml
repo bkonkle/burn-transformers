@@ -35,10 +35,10 @@ serde_json = "1.0"
 serde_yaml = "0.9.11"
 tch = { version = "0.15" }
 thiserror = "1.0.59"
-tokenizers = { version = "0.19", features = [
+tokenizers = { version = "0.19", default-features = false, features = [
     "onig",
     "http",
-], default-features = false }
+] }
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
