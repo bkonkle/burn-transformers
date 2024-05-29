@@ -75,21 +75,18 @@ impl<B: Backend> Model<B> {
     }
 
     /// Defines forward pass for inference
-    pub fn infer(&self, input: BertInferenceBatch<B>) -> Tensor<B, 2> {
-        let [batch_size, _seq_length] = input.tokens.dims();
+    pub fn infer(&self, input: BertInferenceBatch<B>) -> Tensor<B, 3> {
+        let [batch_size, seq_length] = input.tokens.dims();
 
-        let BertModelOutput {
-            pooled_output,
-            hidden_states,
-        } = self.model.forward(input);
+        let BertModelOutput { hidden_states, .. } = self.model.forward(input);
 
         let output = self
             .output
-            .forward(pooled_output.unwrap_or(hidden_states))
-            .slice([0..batch_size, 0..1])
-            .reshape([batch_size, self.n_classes]);
+            .forward(hidden_states)
+            .slice([0..batch_size, 0..seq_length])
+            .reshape([batch_size, seq_length, self.n_classes]);
 
-        softmax(output, 1)
+        softmax(output, 2)
     }
 }
 
@@ -142,7 +139,7 @@ where
     }
 
     /// Defines forward pass for inference
-    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 2> {
+    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 3> {
         self.infer(BertInferenceBatch {
             tokens: input.tokens,
             mask_pad: input.mask_pad,

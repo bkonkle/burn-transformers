@@ -102,11 +102,11 @@ async fn handle_text_classification(
 ) -> anyhow::Result<()> {
     let samples = match model {
         Model::Bert(_) => match dataset {
-            Dataset::Snips => snips::Dataset::get_samples(data_dir).await?,
+            Dataset::Snips => snips::Dataset::get_samples("test").await?,
         },
     };
 
-    let input: Vec<_> = samples.iter().map(|(s, _)| s.as_str()).collect();
+    let input: Vec<_> = samples.iter().map(|(s, _, _)| s.as_str()).collect();
 
     let device = LibTorchDevice::Cuda(0);
 
@@ -117,7 +117,7 @@ async fn handle_text_classification(
     >(device, data_dir, &model.to_string(), input)?;
 
     // Print out predictions for each sample
-    for (i, (text, expected)) in samples.into_iter().enumerate() {
+    for (i, (text, expected, _)) in samples.into_iter().enumerate() {
         // Get predictions for current sample
         #[allow(clippy::single_range_in_vec_init)]
         let prediction = predictions.clone().slice([i..i + 1]);
@@ -151,11 +151,11 @@ async fn handle_token_classification(
 ) -> anyhow::Result<()> {
     let samples = match model {
         Model::Bert(_) => match dataset {
-            Dataset::Snips => snips::Dataset::get_samples(data_dir).await?,
+            Dataset::Snips => snips::Dataset::get_samples("test").await?,
         },
     };
 
-    let input: Vec<_> = samples.iter().map(|(s, _)| s.as_str()).collect();
+    let input: Vec<_> = samples.iter().map(|(s, _, _)| s.as_str()).collect();
 
     let device = LibTorchDevice::Cuda(0);
 
@@ -166,25 +166,25 @@ async fn handle_token_classification(
     >(device, data_dir, &model.to_string(), input)?;
 
     // Print out predictions for each sample
-    for (i, (text, expected)) in samples.into_iter().enumerate() {
+    for (i, (text, _, expected)) in samples.into_iter().enumerate() {
         // Get predictions for current sample
         #[allow(clippy::single_range_in_vec_init)]
         let prediction = predictions.clone().slice([i..i + 1]);
 
-        let class_indexes = prediction.argmax(1).into_data().convert::<i64>().value;
+        let class_indexes = prediction.argmax(2).into_data().convert::<i64>().value;
 
         let classes = class_indexes
             .into_iter()
-            .map(|index| &config.id2label[&(index as usize)])
+            .map(|index| config.id2label[&(index as usize)].clone())
             .collect::<Vec<_>>();
 
-        let class = classes.first().unwrap();
+        let tokens = classes.join(" ");
 
         // Print sample text and predicted class name
         println!(
             "\n=== Item {i} ===\
              \n- Text: {text}\
-             \n- Class: {class}\
+             \n- Tokens: {tokens}\
              \n- Expected: {expected}\
              \n================"
         );

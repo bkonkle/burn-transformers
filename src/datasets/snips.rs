@@ -105,7 +105,7 @@ impl Dataset {
     }
 
     /// Returns random samples from the dataset
-    pub async fn get_samples(mode: &str) -> anyhow::Result<Vec<(String, String)>> {
+    pub async fn get_samples(mode: &str) -> anyhow::Result<Vec<(String, String, String)>> {
         let mut rng = rand::thread_rng();
 
         let data = Self::load(mode).await?;
@@ -115,7 +115,7 @@ impl Dataset {
             let i = rng.gen_range(0..data.len());
             let item = data.get(i).unwrap();
 
-            samples.push((item.input, item.intent));
+            samples.push((item.input, item.intent, item.slots));
         }
 
         Ok(samples)

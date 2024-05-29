@@ -16,7 +16,7 @@ pub fn infer<B: AutodiffBackend, M: Model<B> + 'static>(
     data_dir: &str,    // The location of the top-level data directory
     model_name: &str,  // The name of the model (e.g., "bert-base-uncased")
     samples: Vec<&str>, // Text samples for inference
-) -> anyhow::Result<(Tensor<B, 2>, M::Config)>
+) -> anyhow::Result<(Tensor<B, 3>, M::Config)>
 where
     i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
 {

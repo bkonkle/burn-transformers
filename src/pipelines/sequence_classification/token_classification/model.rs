@@ -26,7 +26,7 @@ where
     fn forward(&self, item: batcher::Train<B>) -> Output<B>;
 
     /// Defines forward pass for inference
-    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 2>;
+    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 3>;
 
     /// Load a model from a file
     fn load_from_safetensors(
