@@ -184,7 +184,7 @@ async fn handle_token_classification(
         println!(
             "\n=== Item {i} ===\
              \n- Text: {text}\
-             \n- Tokens: {tokens}\
+             \n- Tokens:   {tokens}\
              \n- Expected: {expected}\
              \n================"
         );

@@ -10,7 +10,7 @@ use burn::{
     tensor::{
         activation::softmax,
         backend::{AutodiffBackend, Backend},
-        Int, Tensor,
+        Bool, Int, Tensor,
     },
 };
 use derive_new::new;
@@ -48,6 +48,19 @@ impl<B: Backend> Model<B> {
 
         let targets = targets.to_device(device);
 
+        // let output_mask = input.mask_pad.clone().unsqueeze_dim::<3>(2).expand([
+        //     batch_size,
+        //     seq_length,
+        //     self.n_classes,
+        // ]);
+
+        let temp: Tensor<B, 3, Bool> =
+            Tensor::from_bool([[false, true], [false, false]].into(), device)
+                .unsqueeze_dim::<3>(2)
+                .expand([2_i32, 2, 3]);
+
+        // let temp = input.mask_pad.clone();
+
         let BertModelOutput { hidden_states, .. } = self.model.forward(input);
 
         let output = self
@@ -55,6 +68,11 @@ impl<B: Backend> Model<B> {
             .forward(hidden_states)
             .slice([0..batch_size, 0..seq_length])
             .reshape([batch_size, seq_length, self.n_classes]);
+
+        // let output = output.mask_fill(output_mask, self.model.embeddings.pad_token_idx as i32);
+
+        // let temp = softmax(output.clone(), 2);
+        println!(">- temp -> {:?}", temp.into_data());
 
         let loss = CrossEntropyLossConfig::new()
             .with_pad_tokens(Some(vec![self.model.embeddings.pad_token_idx]))
