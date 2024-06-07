@@ -1,6 +1,6 @@
 use burn::{
     tensor::{backend::Backend, Int, Tensor},
-    train::metric::{Adaptor, LossInput},
+    train::metric::{AccuracyInput, Adaptor, LossInput},
 };
 use derive_new::new;
 
@@ -15,6 +15,19 @@ pub struct Output<B: Backend> {
 
     /// The targets.
     pub targets: Tensor<B, 2, Int>,
+}
+
+impl<B: Backend> Adaptor<AccuracyInput<B>> for Output<B> {
+    fn adapt(&self) -> AccuracyInput<B> {
+        let [batch_size, seq_length, n_classes] = self.output.dims();
+
+        AccuracyInput::new(
+            self.output
+                .clone()
+                .reshape([batch_size * seq_length, n_classes]),
+            self.targets.clone().reshape([batch_size * seq_length]),
+        )
+    }
 }
 
 impl<B: Backend> Adaptor<LossInput<B>> for Output<B> {

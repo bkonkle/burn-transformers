@@ -9,7 +9,7 @@ use burn::{
     record::{CompactRecorder, Recorder},
     tensor::backend::AutodiffBackend,
     train::{
-        metric::{CudaMetric, LearningRateMetric, LossMetric},
+        metric::{AccuracyMetric, CudaMetric, LearningRateMetric, LossMetric},
         LearnerBuilder, ValidStep,
     },
 };
@@ -93,8 +93,8 @@ where
     let mut learner = LearnerBuilder::new(&artifact_dir)
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
-        // .metric_train_numeric(HammingScore::new())
-        // .metric_valid_numeric(HammingScore::new())
+        .metric_train_numeric(AccuracyMetric::new())
+        .metric_valid_numeric(AccuracyMetric::new())
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
         .metric_train_numeric(LearningRateMetric::new())
