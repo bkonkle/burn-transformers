@@ -78,20 +78,13 @@ impl<B: Backend> Model<B> {
     pub fn infer(&self, input: BertInferenceBatch<B>) -> Tensor<B, 3> {
         let [batch_size, seq_length] = input.tokens.dims();
 
-        let output_mask = input.mask_pad.clone().unsqueeze_dim::<3>(2).expand([
-            batch_size,
-            seq_length,
-            self.n_classes,
-        ]);
-
         let BertModelOutput { hidden_states, .. } = self.model.forward(input);
 
         let output = self
             .output
             .forward(hidden_states)
             .slice([0..batch_size, 0..seq_length])
-            .reshape([batch_size, seq_length, self.n_classes])
-            .mask_fill(output_mask, self.model.embeddings.pad_token_idx as i32);
+            .reshape([batch_size, seq_length, self.n_classes]);
 
         softmax(output, 2)
     }
