@@ -36,7 +36,7 @@ pub struct Train<B: Backend> {
 #[derive(Clone)]
 pub struct Batcher<B: Backend> {
     /// Tokenizer for converting text to token IDs
-    tokenizer: Tokenizer,
+    pub tokenizer: Tokenizer,
 
     /// Maximum sequence length for tokenized text
     pub max_seq_length: usize,
