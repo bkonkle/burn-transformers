@@ -93,8 +93,12 @@ where
     let mut learner = LearnerBuilder::new(&artifact_dir)
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
-        .metric_train_numeric(AccuracyMetric::new())
-        .metric_valid_numeric(AccuracyMetric::new())
+        .metric_train_numeric(
+            AccuracyMetric::new().with_pad_token(model_config.get_config().pad_token_id),
+        )
+        .metric_valid_numeric(
+            AccuracyMetric::new().with_pad_token(model_config.get_config().pad_token_id),
+        )
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
         .metric_train_numeric(LearningRateMetric::new())

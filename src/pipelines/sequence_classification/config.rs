@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use burn::LearningRate;
 
@@ -20,10 +20,7 @@ pub struct Config {
     pub hidden_dropout_prob: f64,
 
     /// A mapping from class ids to class name labels
-    pub id2label: HashMap<usize, String>,
-
-    /// A mapping from class name labels to class ids
-    pub label2id: HashMap<String, usize>,
+    pub id2label: BTreeMap<usize, String>,
 }
 
 /// Define configuration struct for the experiment

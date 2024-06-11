@@ -85,32 +85,19 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
             let mut class_ids: Vec<_> = item
                 .class_labels()
                 .iter()
-                .map(|slot| self.batcher.reverse_map.get(*slot).unwrap_or(&0).to_owned())
+                .map(|slot| self.batcher.label2id.get(*slot).unwrap_or(&0).to_owned())
                 .collect();
 
-            // Keep a separate index for the class labels, skipping special tokens
-            let mut class_index = 0;
-
-            // Insert padding to account for wordpieces.
+            // Insert padding to account for special tokens and wordpieces, which the dataset won't
+            // include
             for (i, token) in tokens.get_tokens().iter().enumerate() {
-                if tokens.get_special_tokens_mask().get(i) == Some(&1) {
-                    // This is a special token, so skip it
-                    continue;
-                }
-
-                // If the token is a wordpiece, we need to insert a padding token in the class_ids
-                // tensor. Otherwise, we should increment the class_index.
-                if token.starts_with("##") {
-                    if class_index <= class_ids.len() {
-                        class_ids.insert(class_index, self.batcher.pad_token_id);
+                if tokens.get_special_tokens_mask().get(i) == Some(&1) || token.starts_with("##") {
+                    if i < class_ids.len() {
+                        class_ids.insert(i, self.batcher.pad_token_id);
                     } else {
-                        // These are trailing wordpieces, so we just need to append pad tokens
-                        // to the end
                         class_ids.push(self.batcher.pad_token_id);
                     }
                 }
-
-                class_index += 1;
             }
 
             class_ids_list.push(class_ids);

@@ -68,7 +68,7 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
         for item in items {
             let class_id = self
                 .batcher
-                .reverse_map
+                .label2id
                 .get(item.class_label())
                 .unwrap_or(&self.batcher.unk_token_id);
 

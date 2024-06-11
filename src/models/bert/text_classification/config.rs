@@ -1,6 +1,6 @@
 //! Adapt Bert for Sequence Classification to the Text Classification pipeline
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use bert_burn::model::BertModelConfig;
 use burn::{
@@ -21,10 +21,7 @@ pub struct Config {
     pub model: BertModelConfig,
 
     /// A map from class ids to class name labels
-    pub id2label: HashMap<usize, String>,
-
-    /// A reverse map from class name labels to class ids
-    pub label2id: HashMap<String, usize>,
+    pub id2label: BTreeMap<usize, String>,
 }
 
 impl Config {
@@ -34,14 +31,9 @@ impl Config {
             .iter()
             .enumerate()
             .map(|(i, s)| (i, s.trim().to_string()))
-            .collect::<HashMap<_, _>>();
+            .collect();
 
-        let label2id = id2label
-            .iter()
-            .map(|(k, v)| (v.clone(), *k))
-            .collect::<HashMap<_, _>>();
-
-        Ok(Config::new(model, id2label, label2id))
+        Ok(Config::new(model, id2label))
     }
 
     /// Initialize the model
@@ -97,7 +89,6 @@ impl text_classification::ModelConfig for Config {
             max_seq_len: self.model.max_seq_len,
             hidden_dropout_prob: self.model.hidden_dropout_prob,
             id2label: self.id2label.clone(),
-            label2id: self.label2id.clone(),
         }
     }
 }

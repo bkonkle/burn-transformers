@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug};
 
 use burn::{
     data::dataloader,
@@ -10,7 +10,7 @@ use burn::{
 use derive_new::new;
 use tokenizers::Tokenizer;
 
-use crate::pipelines::sequence_classification;
+use crate::{pipelines::sequence_classification, utils::classes::invert_map};
 
 /// An inference batch for text classification
 #[derive(Debug, Clone, new)]
@@ -47,8 +47,11 @@ pub struct Batcher<B: Backend> {
     /// ID of the UNK token
     pub unk_token_id: usize,
 
-    /// A reverse map from class names to their corresponding ids
-    pub reverse_map: HashMap<String, usize>,
+    /// A mapping from class ids to class name labels
+    pub id2label: BTreeMap<usize, String>,
+
+    /// A mapping from class name labels to class ids
+    pub label2id: BTreeMap<String, usize>,
 
     /// Device on which to perform computation (e.g., CPU or CUDA device)
     pub device: B::Device,
@@ -61,9 +64,9 @@ impl<B: Backend> Batcher<B> {
         config: sequence_classification::Config,
         device: B::Device,
     ) -> Self {
-        let reverse_map = config.label2id;
+        let label2id: BTreeMap<String, usize> = invert_map(config.id2label.clone());
 
-        let unk_token_id = reverse_map
+        let unk_token_id = label2id
             .get("UNK")
             .unwrap_or(&(config.pad_token_id + 1))
             .to_owned();
@@ -73,7 +76,8 @@ impl<B: Backend> Batcher<B> {
             pad_token_id: config.pad_token_id,
             unk_token_id,
             max_seq_length: config.max_seq_len.unwrap_or(config.max_position_embeddings),
-            reverse_map,
+            id2label: config.id2label,
+            label2id,
             device,
         }
     }

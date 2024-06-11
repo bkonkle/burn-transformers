@@ -9,3 +9,6 @@ pub mod tensors;
 
 /// Renderer Utilities
 pub mod renderer;
+
+/// Utilities for classification tasks
+pub mod classes;

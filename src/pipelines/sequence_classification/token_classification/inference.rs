@@ -47,6 +47,8 @@ where
     let samples = samples.into_iter().map(|s| s.to_string()).collect();
     let item = batcher.batch(samples); // Batch samples using the batcher
 
-    // Run inference on the given text samples, and return the config for reference
-    Ok((model.infer(item), model_config.clone()))
+    // Run inference on the given text samples
+    let predictions = model.infer(item);
+
+    todo!()
 }
