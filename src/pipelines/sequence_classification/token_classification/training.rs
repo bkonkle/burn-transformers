@@ -72,12 +72,12 @@ where
     // Initialize data loaders for training and testing data
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
         .batch_size(config.batch_size)
-        .num_workers(1)
+        .num_workers(1) // TODO: Change back to 4
         .build(SamplerDataset::new(dataset_train, 10_000));
 
     let dataloader_test = DataLoaderBuilder::new(batcher_test)
         .batch_size(config.batch_size * 2)
-        .num_workers(1)
+        .num_workers(1) // TODO: Change back to 4
         .build(SamplerDataset::new(dataset_test, 1_000));
 
     // Initialize optimizer
