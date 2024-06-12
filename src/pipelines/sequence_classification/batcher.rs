@@ -10,10 +10,7 @@ use burn::{
 use derive_new::new;
 use tokenizers::Tokenizer;
 
-use crate::{
-    pipelines::sequence_classification,
-    utils::{classes::invert_map, tensors::pad_to},
-};
+use crate::{pipelines::sequence_classification, utils::classes::invert_map};
 
 /// An inference batch for text classification
 #[derive(Debug, Clone, new)]
@@ -23,9 +20,6 @@ pub struct Infer<B: Backend> {
 
     /// Padding mask for the tokenized text containing booleans for padding locations
     pub mask_pad: Tensor<B, 2, Bool>,
-
-    /// Attention mask for tokenized text which ignores special characters and wordpieces
-    pub attention_mask: Tensor<B, 2, Bool>,
 }
 
 /// A training batch for text classification
@@ -96,7 +90,6 @@ impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
         let batch_size = items.len();
 
         let mut token_ids_list = Vec::with_capacity(batch_size);
-        let mut attention_mask_list = Vec::with_capacity(batch_size);
 
         // Tokenize text and create class_id tensor for each item
         for input in items {
@@ -106,28 +99,8 @@ impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
                 .expect("unable to encode");
 
             let token_ids: Vec<_> = tokens.get_ids().iter().map(|t| *t as usize).collect();
-            let token_ids_len = token_ids.len();
 
             token_ids_list.push(token_ids);
-
-            // Generate ae attention mask to account for special tokens and wordpieces, which should
-            // be stripped out in the end
-            let mut attention_mask = Vec::with_capacity(token_ids_len);
-
-            for (i, token) in tokens.get_tokens().iter().enumerate() {
-                let is_special_token = tokens.get_special_tokens_mask().get(i) == Some(&1);
-                let is_wordpiece = token.starts_with("##");
-
-                if is_special_token || is_wordpiece {
-                    // Use the padding token to ignore
-                    attention_mask.push(self.pad_token_id);
-                } else {
-                    // Use the padding token plus one for attention
-                    attention_mask.push(self.pad_token_id + 1);
-                }
-            }
-
-            attention_mask_list.push(attention_mask);
         }
 
         let padding = generate_padding_mask(
@@ -137,21 +110,10 @@ impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
             &self.device,
         );
 
-        let attention_padded = pad_to(
-            self.pad_token_id,
-            attention_mask_list,
-            self.max_seq_length,
-            &self.device,
-        );
-
-        // Now, give attention only to elements that are not padding tokens
-        let attention_mask = attention_padded.equal_elem(self.pad_token_id as i64 + 1);
-
         // Create and return inference batch
         Infer {
             tokens: padding.tensor,
             mask_pad: padding.mask,
-            attention_mask,
         }
     }
 }

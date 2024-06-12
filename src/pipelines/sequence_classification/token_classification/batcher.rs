@@ -4,12 +4,16 @@ use std::fmt::Debug;
 
 use burn::{
     data::dataloader,
+    nn::attention::generate_padding_mask,
     tensor::{backend::Backend, Int, Tensor},
 };
 use derive_new::new;
 use tokenizers::Tokenizer;
 
-use crate::{pipelines::sequence_classification, utils::tensors};
+use crate::{
+    pipelines::sequence_classification::{self, batcher::Infer},
+    utils::tensors,
+};
 
 use super::Item;
 
@@ -57,20 +61,27 @@ impl<B: Backend> dataloader::batcher::Batcher<String, sequence_classification::b
 impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<B> {
     /// Collects a vector of text classification items into a training batch
     fn batch(&self, items: Vec<I>) -> Train<B> {
+        // We can't re-use the "Infer" workflow here, because we need to pad the slot labels for
+        // words that are split into multiple tokens when tokenized
         let batch_size = items.len();
 
-        let inputs = items.iter().map(|item| item.input().to_string()).collect();
-        let infer: sequence_classification::batcher::Infer<B> = self.batch(inputs);
-
-        let seq_length = infer.tokens.dims()[1];
-
+        let mut token_ids_list = Vec::with_capacity(batch_size);
         let mut class_ids_list = Vec::with_capacity(batch_size);
 
-        let attention_masks = infer.attention_mask.to_data().value;
-        let attention_masks = attention_masks.chunks(seq_length).collect::<Vec<_>>();
-
         // Tokenize text and create class_id tensor for each item
-        for (i, item) in items.iter().enumerate() {
+        for item in items {
+            // Tokens
+            let tokens = self
+                .batcher
+                .tokenizer
+                .encode(item.input(), true)
+                .expect("unable to encode");
+
+            let token_ids: Vec<_> = tokens.get_ids().iter().map(|t| *t as usize).collect();
+
+            token_ids_list.push(token_ids);
+
+            // Target class ids
             let mut class_ids: Vec<_> = item
                 .class_labels()
                 .iter()
@@ -79,8 +90,8 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
 
             // Insert padding to account for special tokens and wordpieces, which the dataset won't
             // include
-            for (i, attention) in attention_masks[i].iter().enumerate() {
-                if !*attention {
+            for (i, token) in tokens.get_tokens().iter().enumerate() {
+                if tokens.get_special_tokens_mask().get(i) == Some(&1) || token.starts_with("##") {
                     if i < class_ids.len() {
                         class_ids.insert(i, self.batcher.pad_token_id);
                     } else {
@@ -92,6 +103,15 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
             class_ids_list.push(class_ids);
         }
 
+        let pad_mask = generate_padding_mask(
+            self.batcher.pad_token_id,
+            token_ids_list,
+            Some(self.batcher.max_seq_length),
+            &self.batcher.device,
+        );
+
+        let seq_length = pad_mask.tensor.dims()[1];
+
         // Pad the slot labels to match the tokenized sequence length
         let targets = tensors::pad_to::<B>(
             self.batcher.pad_token_id,
@@ -102,7 +122,10 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
 
         // Create and return training batch
         Train {
-            input: infer,
+            input: Infer {
+                tokens: pad_mask.tensor,
+                mask_pad: pad_mask.mask,
+            },
             targets,
         }
     }
