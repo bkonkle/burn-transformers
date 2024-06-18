@@ -65,15 +65,17 @@ where
     let batcher_test =
         Batcher::<B::InnerBackend>::new(tokenizer, model_config.get_config(), device.clone());
 
+    let workers = std::thread::available_parallelism()?;
+
     // Initialize data loaders for training and testing data
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
         .batch_size(config.batch_size)
-        .num_workers(4)
+        .num_workers(workers.into())
         .build(SamplerDataset::new(dataset_train, 10_000));
 
     let dataloader_test = DataLoaderBuilder::new(batcher_test)
         .batch_size(config.batch_size * 2)
-        .num_workers(4)
+        .num_workers(workers.into())
         .build(SamplerDataset::new(dataset_test, 1_000));
 
     // Initialize optimizer

@@ -79,24 +79,24 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
 
             // Insert padding to account for special tokens and wordpieces, which the dataset won't
             // include
-            for (i, attention) in attention_masks[i].iter().enumerate() {
+            for (j, attention) in attention_masks[i].iter().enumerate() {
                 if !*attention {
-                    if i < class_ids.len() {
-                        class_ids.insert(i, self.batcher.pad_token_id);
-                    } else {
+                    let class_ids_len = class_ids.len();
+
+                    if j < class_ids_len {
+                        class_ids.insert(j, self.batcher.pad_token_id);
+                    } else if class_ids_len < seq_length {
                         class_ids.push(self.batcher.pad_token_id);
                     }
                 }
             }
 
+            if class_ids.len() > seq_length {
+                println!(">- item -> {:?}", item);
+            }
+
             class_ids_list.push(class_ids);
         }
-
-        // TODO: Troubleshoot this error:
-        // === Tensor Operation Error ===
-        // Operation: 'Range Assign'
-        // Reason:
-        //     1. The provided ranges array has a range that exceeds the current tensor size. The range (0..23) exceeds the size of the tensor (22) at dimension 1. Current tensor shape [96, 22], value tensor shape [1, 23], provided ranges [94..95, 0..23].
 
         // Pad the slot labels to match the tokenized sequence length
         let targets = tensors::pad_to::<B>(

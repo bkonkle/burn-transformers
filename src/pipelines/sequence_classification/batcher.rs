@@ -99,10 +99,10 @@ impl<B: Backend> dataloader::batcher::Batcher<String, Infer<B>> for Batcher<B> {
         let mut attention_mask_list = Vec::with_capacity(batch_size);
 
         // Tokenize text and create class_id tensor for each item
-        for input in items {
+        for input in &items {
             let tokens = self
                 .tokenizer
-                .encode(input, true)
+                .encode(input.to_owned(), true)
                 .expect("unable to encode");
 
             let token_ids: Vec<_> = tokens.get_ids().iter().map(|t| *t as usize).collect();

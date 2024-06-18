@@ -65,7 +65,7 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
         let mut class_id_list = Vec::with_capacity(batch_size);
 
         // Tokenize text and create class_id tensor for each item
-        for item in items {
+        for item in &items {
             let class_id = self
                 .batcher
                 .label2id
