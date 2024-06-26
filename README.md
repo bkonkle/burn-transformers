@@ -25,7 +25,7 @@ NOTE: This library is in early development, and the API may shift rapidly as it 
 | | ALBERT | ❌ |
 | | DistilBERT | ❌ |
 | | Others... | ❌ |
-| Token Classification | ... | ❌ |
+| Token Classification | BERT | ✅ |
 | Zero Shot Classification | ... | ❌ |
 | Text Generation | ... | ❌ |
 | Summarization | ... | ❌ |
