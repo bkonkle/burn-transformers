@@ -63,7 +63,7 @@ where
             .slice([b..b + 1, 0..seq_length])
             .reshape([seq_length])
             .nonzero()
-            .remove(0);
+            .swap_remove(0);
 
         let prediction = output
             .clone()
