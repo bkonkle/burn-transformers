@@ -2,14 +2,20 @@ use std::fmt::Display;
 
 use super::models::{bert, Model};
 
-/// The unique string token that identifies this pipeline
+/// Text Classification
 pub static TEXT_CLASSIFICATION: &str = "text-classification";
+
+/// Token Classification
+pub static TOKEN_CLASSIFICATION: &str = "token-classification";
 
 /// Available Pipelines
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Pipeline {
     /// Text Classification
     TextClassification,
+
+    /// Token Classification
+    TokenClassification,
 }
 
 impl Pipeline {
@@ -18,6 +24,9 @@ impl Pipeline {
         match self {
             Pipeline::TextClassification => {
                 Model::Bert(bert::DEFAULT_TEXT_CLASSIFICATION_MODEL.to_string())
+            }
+            Pipeline::TokenClassification => {
+                Model::Bert(bert::DEFAULT_TOKEN_CLASSIFICATION_MODEL.to_string())
             }
         }
     }
@@ -29,6 +38,8 @@ impl TryFrom<&str> for Pipeline {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value == TEXT_CLASSIFICATION {
             Ok(Pipeline::TextClassification)
+        } else if value == TOKEN_CLASSIFICATION {
+            Ok(Pipeline::TokenClassification)
         } else {
             Err(PipelineError::Unknown(value.to_string()))
         }
@@ -39,6 +50,7 @@ impl Display for Pipeline {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             Pipeline::TextClassification => TEXT_CLASSIFICATION,
+            Pipeline::TokenClassification => TOKEN_CLASSIFICATION,
         };
 
         write!(f, "{}", name)

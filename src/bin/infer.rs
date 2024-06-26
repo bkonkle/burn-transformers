@@ -5,8 +5,8 @@ use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
     cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
     datasets::snips,
-    models::bert::sequence_classification,
-    pipelines::text_classification::infer,
+    models::bert,
+    pipelines::sequence_classification,
 };
 use pico_args::Arguments;
 
@@ -89,6 +89,9 @@ async fn main() -> anyhow::Result<()> {
         Pipeline::TextClassification => {
             handle_text_classification(&model, &dataset, &data_dir).await
         }
+        Pipeline::TokenClassification => {
+            handle_token_classification(&model, &dataset, &data_dir).await
+        }
     }
 }
 
@@ -99,23 +102,22 @@ async fn handle_text_classification(
 ) -> anyhow::Result<()> {
     let samples = match model {
         Model::Bert(_) => match dataset {
-            Dataset::Snips => snips::Dataset::get_samples(data_dir).await?,
+            Dataset::Snips => snips::Dataset::get_samples("test").await?,
         },
     };
 
-    let input: Vec<_> = samples.iter().map(|(s, _)| s.as_str()).collect();
+    let input: Vec<_> = samples.iter().map(|(s, _, _)| s.as_str()).collect();
 
     let device = LibTorchDevice::Cuda(0);
 
     // Get model predictions
-    // TODO: Make this more generic
-    let (predictions, config) = infer::<
+    let (predictions, config) = sequence_classification::text_classification::infer::<
         Autodiff<LibTorch>,
-        sequence_classification::Model<Autodiff<LibTorch>>,
+        bert::text_classification::Model<Autodiff<LibTorch>>,
     >(device, data_dir, &model.to_string(), input)?;
 
     // Print out predictions for each sample
-    for (i, (text, expected)) in samples.into_iter().enumerate() {
+    for (i, (text, expected, _)) in samples.into_iter().enumerate() {
         // Get predictions for current sample
         #[allow(clippy::single_range_in_vec_init)]
         let prediction = predictions.clone().slice([i..i + 1]);
@@ -134,6 +136,60 @@ async fn handle_text_classification(
             "\n=== Item {i} ===\
              \n- Text: {text}\
              \n- Class: {class}\
+             \n- Expected: {expected}\
+             \n================"
+        );
+    }
+
+    Ok(())
+}
+
+async fn handle_token_classification(
+    model: &Model,
+    dataset: &Dataset,
+    data_dir: &str,
+) -> anyhow::Result<()> {
+    let samples = match model {
+        Model::Bert(_) => match dataset {
+            Dataset::Snips => snips::Dataset::get_samples("test").await?,
+        },
+    };
+
+    let input: Vec<_> = samples.iter().map(|(s, _, _)| s.as_str()).collect();
+
+    let device = LibTorchDevice::Cuda(0);
+
+    // Get model predictions
+    let (predictions, config) = sequence_classification::token_classification::infer::<
+        Autodiff<LibTorch>,
+        bert::token_classification::Model<Autodiff<LibTorch>>,
+    >(device, data_dir, &model.to_string(), input)?;
+
+    // Print out predictions for each sample
+    for (i, (text, _, expected)) in samples.into_iter().enumerate() {
+        // Get predictions for current sample
+        #[allow(clippy::single_range_in_vec_init)]
+        let prediction = &predictions[i];
+
+        let class_indexes = prediction
+            .clone()
+            .argmax(1)
+            .into_data()
+            .convert::<i64>()
+            .value;
+
+        let classes = class_indexes
+            .into_iter()
+            .map(|index| config.id2label[&(index as usize)].clone())
+            .collect::<Vec<_>>();
+
+        let tokens = classes.join(" ");
+
+        // Print sample text and predicted class name
+        println!(
+            "\n=== Item {i} ===\
+             \n- Text: {text}\
+             \n- Tokens:   {tokens}\
              \n- Expected: {expected}\
              \n================"
         );

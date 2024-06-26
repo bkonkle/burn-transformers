@@ -4,7 +4,10 @@ use hf_hub::api::tokio;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{pipelines::text_classification, utils::files::read_file};
+use crate::{
+    pipelines::sequence_classification::{text_classification, token_classification},
+    utils::files::read_file,
+};
 
 /// The name of the Snips dataset
 pub static DATASET: &str = "snips";
@@ -29,6 +32,16 @@ impl text_classification::Item for Item {
 
     fn class_label(&self) -> &str {
         &self.intent
+    }
+}
+
+impl token_classification::Item for Item {
+    fn input(&self) -> &str {
+        &self.input
+    }
+
+    fn class_labels(&self) -> Vec<&str> {
+        self.slots.split_whitespace().collect()
     }
 }
 
@@ -92,7 +105,7 @@ impl Dataset {
     }
 
     /// Returns random samples from the dataset
-    pub async fn get_samples(mode: &str) -> anyhow::Result<Vec<(String, String)>> {
+    pub async fn get_samples(mode: &str) -> anyhow::Result<Vec<(String, String, String)>> {
         let mut rng = rand::thread_rng();
 
         let data = Self::load(mode).await?;
@@ -102,7 +115,7 @@ impl Dataset {
             let i = rng.gen_range(0..data.len());
             let item = data.get(i).unwrap();
 
-            samples.push((item.input, item.intent));
+            samples.push((item.input, item.intent, item.slots));
         }
 
         Ok(samples)

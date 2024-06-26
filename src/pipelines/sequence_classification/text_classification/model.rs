@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, path::PathBuf};
+use std::{fmt::Display, path::PathBuf};
 
 use burn::{
     module::AutodiffModule,
@@ -6,31 +6,9 @@ use burn::{
     train::{ClassificationOutput, TrainStep},
 };
 
+use crate::pipelines::sequence_classification;
+
 use super::batcher::{self, Train};
-
-/// The common model configuration properties needed for the pipeline
-pub struct Config {
-    /// The padding token ID
-    pub pad_token_id: usize,
-
-    /// The max position embeddings
-    pub max_position_embeddings: usize,
-
-    /// The size of the hidden state
-    pub hidden_size: usize,
-
-    /// An optional max sequence length, if different from max position embeddings
-    pub max_seq_len: Option<usize>,
-
-    /// The hidden dropout probability
-    pub hidden_dropout_prob: f64,
-
-    /// A mapping from class ids to class name labels
-    pub id2label: HashMap<usize, String>,
-
-    /// A mapping from class name labels to class ids
-    pub label2id: HashMap<String, usize>,
-}
 
 /// A trait for models that can be used for Text Classification
 pub trait Model<B>:
@@ -46,7 +24,7 @@ where
     fn forward(&self, item: batcher::Train<B>) -> ClassificationOutput<B>;
 
     /// Defines forward pass for inference
-    fn infer(&self, input: batcher::Infer<B>) -> Tensor<B, 2>;
+    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 2>;
 
     /// Load a model from a file
     fn load_from_safetensors(
@@ -70,5 +48,5 @@ pub trait ModelConfig: burn::config::Config + Clone {
     ) -> impl std::future::Future<Output = anyhow::Result<Self>> + Send;
 
     /// Return the Config needed for the text classification pipeline
-    fn get_config(&self) -> Config;
+    fn get_config(&self) -> sequence_classification::Config;
 }

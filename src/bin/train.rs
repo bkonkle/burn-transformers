@@ -5,8 +5,8 @@ use burn::backend::{libtorch::LibTorchDevice, Autodiff, LibTorch};
 use burn_transformers::{
     cli::{datasets::Dataset, models::Model, pipelines::Pipeline},
     datasets::snips,
-    models::bert::sequence_classification,
-    pipelines::text_classification,
+    models::bert,
+    pipelines::sequence_classification,
 };
 use pico_args::Arguments;
 
@@ -24,6 +24,7 @@ Options:
   -n, --num-epochs     Number of epochs to train for
   -b, --batch-size     Batch size
   -d, --data-dir       The path to the top-level data directory (defaults to 'data')
+  --no-tui             Disable TUI
 ";
 
 #[derive(Debug)]
@@ -34,6 +35,7 @@ struct Args {
     num_epochs: Option<usize>,
     batch_size: Option<usize>,
     data_dir: Option<String>,
+    use_tui: bool,
 }
 
 impl Args {
@@ -58,6 +60,7 @@ impl Args {
                 pico_args::Error::MissingArgument => anyhow!("Missing required argument: DATASET"),
                 _ => anyhow!("{}", e),
             })?,
+            use_tui: !(pargs.contains("--no-tui")),
         };
 
         Ok(Some(args))
@@ -87,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
 
     match pipeline {
         Pipeline::TextClassification => handle_text_classification(&dataset, &model, &args).await,
+        Pipeline::TokenClassification => handle_token_classification(&dataset, &model, &args).await,
     }
 }
 
@@ -100,7 +104,7 @@ async fn handle_text_classification(
             let train = snips::Dataset::load("train").await?;
             let test = snips::Dataset::load("test").await?;
 
-            let mut config = text_classification::training::Config::new(
+            let mut config = sequence_classification::text_classification::training::Config::new(
                 model.to_string(),
                 dataset.to_string(),
                 train.intent_labels.clone(),
@@ -119,12 +123,54 @@ async fn handle_text_classification(
             }
 
             let device = LibTorchDevice::Cuda(0);
-            text_classification::training::train::<
+            sequence_classification::text_classification::train::<
                 Autodiff<LibTorch>,
-                sequence_classification::Model<Autodiff<LibTorch>>,
+                bert::text_classification::Model<Autodiff<LibTorch>>,
                 snips::Item,
                 snips::Dataset,
             >(vec![device], train, test, config)
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_token_classification(
+    dataset: &Dataset,
+    model: &Model,
+    args: &Args,
+) -> anyhow::Result<()> {
+    match dataset {
+        Dataset::Snips => {
+            let train = snips::Dataset::load("train").await?;
+            let test = snips::Dataset::load("test").await?;
+
+            let mut config = sequence_classification::token_classification::training::Config::new(
+                model.to_string(),
+                dataset.to_string(),
+                train.slot_labels.clone(),
+            );
+
+            if let Some(num_epochs) = args.num_epochs {
+                config.num_epochs = num_epochs;
+            }
+
+            if let Some(batch_size) = args.batch_size {
+                config.batch_size = batch_size;
+            }
+
+            if let Some(data_dir) = &args.data_dir {
+                config.data_dir = data_dir.to_string();
+            }
+
+            let device = LibTorchDevice::Cuda(0);
+            sequence_classification::token_classification::train::<
+                Autodiff<LibTorch>,
+                bert::token_classification::Model<Autodiff<LibTorch>>,
+                snips::Item,
+                snips::Dataset,
+            >(vec![device], train, test, config, args.use_tui)
             .await?;
         }
     }

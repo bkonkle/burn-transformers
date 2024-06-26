@@ -25,7 +25,7 @@ NOTE: This library is in early development, and the API may shift rapidly as it 
 | | ALBERT | ❌ |
 | | DistilBERT | ❌ |
 | | Others... | ❌ |
-| Token Classification | ... | ❌ |
+| Token Classification | BERT | ✅ |
 | Zero Shot Classification | ... | ❌ |
 | Text Generation | ... | ❌ |
 | Summarization | ... | ❌ |
@@ -43,7 +43,7 @@ Add this to your Cargo.toml:
 
 ```toml
     [dependencies]
-    bert-transformers = { git = "<https://github.com/bkonkle/burn-transformers>" }
+    bert-transformers = { git = "https://github.com/bkonkle/burn-transformers" }
 ```
 
 Once `bert-burn` is published to crates.io, this project will be able to be published there as well.

@@ -10,52 +10,20 @@ use burn::{
     tensor::backend::AutodiffBackend,
     train::{
         metric::{AccuracyMetric, CudaMetric, LearningRateMetric, LossMetric},
-        ClassificationOutput, LearnerBuilder, ValidStep,
+        LearnerBuilder, ValidStep,
     },
-    LearningRate,
 };
 use tokenizers::Tokenizer;
 
-use crate::utils::hugging_face::download_hf_model;
+use crate::{
+    pipelines::sequence_classification,
+    utils::{hugging_face::download_hf_model, renderer},
+};
 
-use super::{batcher::Train, Batcher, Item, Model, ModelConfig};
+use super::{batcher::Train, Batcher, Item, Model, ModelConfig, Output};
 
-/// Define configuration struct for the experiment
-#[derive(burn::config::Config)]
-pub struct Config {
-    /// Batch size
-    #[config(default = 2)]
-    pub batch_size: usize,
-
-    /// Number of epochs
-    #[config(default = 1)]
-    pub num_epochs: usize,
-
-    /// Adam epsilon
-    #[config(default = 1e-8)]
-    pub adam_epsilon: f32,
-
-    /// Initial learning rate
-    #[config(default = 1e-2)]
-    pub learning_rate: LearningRate,
-
-    /// Dropout rate
-    #[config(default = 0.1)]
-    pub hidden_dropout_prob: f64,
-
-    /// The location of the top-level data directory
-    #[config(default = "\"data\".to_string()")]
-    pub data_dir: String,
-
-    /// Model name (e.g., "bert-base-uncased")
-    pub model_name: String,
-
-    /// The Dataset to use (e.g., "snips")
-    pub dataset_name: String,
-
-    /// Class labels for the selected dataset
-    pub labels: Vec<String>,
-}
+/// Training Config
+pub type Config = sequence_classification::config::Training;
 
 /// Define train function
 pub async fn train<B, M, I, D>(
@@ -63,6 +31,7 @@ pub async fn train<B, M, I, D>(
     dataset_train: D,        // Training dataset
     dataset_test: D,         // Testing dataset
     config: Config,          // Experiment configuration
+    use_tui: bool,           // Whether to use TUI or not
 ) -> anyhow::Result<()>
 where
     B: AutodiffBackend,
@@ -74,16 +43,20 @@ where
 
     M::InnerModule: ValidStep<
         Train<<B as AutodiffBackend>::InnerBackend>,
-        ClassificationOutput<<B as AutodiffBackend>::InnerBackend>,
+        Output<<B as AutodiffBackend>::InnerBackend>,
     >,
 {
     let device = &devices[0];
     let artifact_dir = format!(
-        "{}/text-classification/{}",
+        "{}/token-classification/{}",
         config.data_dir, config.model_name
     );
 
-    let (model_config, model_file) = get_model_config::<B, M>(&config).await?;
+    let (config_file, model_file) = download_hf_model(&config.model_name).await;
+
+    let model_config = M::Config::load_pretrained(config_file, &config.labels)
+        .await
+        .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
 
     let model = M::load_from_safetensors(device, model_file, model_config.clone())?;
 
@@ -91,19 +64,22 @@ where
     let tokenizer = Tokenizer::from_pretrained(&config.model_name, None).unwrap();
 
     // Initialize batchers for training and testing data
-    let batcher_train = Batcher::<B>::new(tokenizer.clone(), model_config.clone(), device.clone());
+    let batcher_train =
+        Batcher::<B>::new(tokenizer.clone(), model_config.get_config(), device.clone());
     let batcher_test =
-        Batcher::<B::InnerBackend>::new(tokenizer, model_config.clone(), device.clone());
+        Batcher::<B::InnerBackend>::new(tokenizer, model_config.get_config(), device.clone());
+
+    let workers = std::thread::available_parallelism()?;
 
     // Initialize data loaders for training and testing data
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
         .batch_size(config.batch_size)
-        .num_workers(4)
+        .num_workers(workers.into())
         .build(SamplerDataset::new(dataset_train, 10_000));
 
     let dataloader_test = DataLoaderBuilder::new(batcher_test)
         .batch_size(config.batch_size * 2)
-        .num_workers(4)
+        .num_workers(workers.into())
         .build(SamplerDataset::new(dataset_test, 1_000));
 
     // Initialize optimizer
@@ -116,19 +92,28 @@ where
         .init();
 
     // Initialize learner
-    let learner = LearnerBuilder::new(&artifact_dir)
+    let mut learner = LearnerBuilder::new(&artifact_dir)
         .metric_train(CudaMetric::new())
         .metric_valid(CudaMetric::new())
-        .metric_train_numeric(AccuracyMetric::new())
-        .metric_valid_numeric(AccuracyMetric::new())
+        .metric_train_numeric(
+            AccuracyMetric::new().with_pad_token(model_config.get_config().pad_token_id),
+        )
+        .metric_valid_numeric(
+            AccuracyMetric::new().with_pad_token(model_config.get_config().pad_token_id),
+        )
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
         .metric_train_numeric(LearningRateMetric::new())
         .with_file_checkpointer(CompactRecorder::new())
         .devices(devices)
         .num_epochs(config.num_epochs)
-        .summary()
-        .build(model, optimizer, lr_scheduler);
+        .summary();
+
+    if !use_tui {
+        learner = learner.renderer(renderer::Simple::new());
+    }
+
+    let learner = learner.build(model, optimizer, lr_scheduler);
 
     // Train the model
     let model_trained = learner.fit(dataloader_train, dataloader_test);
@@ -146,23 +131,4 @@ where
         .unwrap();
 
     Ok(())
-}
-
-/// Get the model configuration from the given dataset directory
-pub async fn get_model_config<B, M>(
-    config: &Config,
-) -> anyhow::Result<(<M as Model<B>>::Config, std::path::PathBuf)>
-where
-    B: AutodiffBackend,
-    M: Model<B> + 'static,
-
-    i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
-{
-    let (config_file, model_file) = download_hf_model(&config.model_name).await;
-
-    let model_config = M::Config::load_pretrained(config_file, &config.labels)
-        .await
-        .map_err(|e| anyhow!("Unable to load pre-trained model config file: {}", e))?;
-
-    Ok((model_config, model_file))
 }
