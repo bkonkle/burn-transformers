@@ -91,10 +91,6 @@ impl<B: Backend, I: Item> dataloader::batcher::Batcher<I, Train<B>> for Batcher<
                 }
             }
 
-            if class_ids.len() > seq_length {
-                println!(">- item -> {:?}", item);
-            }
-
             class_ids_list.push(class_ids);
         }
 

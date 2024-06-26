@@ -169,9 +169,14 @@ async fn handle_token_classification(
     for (i, (text, _, expected)) in samples.into_iter().enumerate() {
         // Get predictions for current sample
         #[allow(clippy::single_range_in_vec_init)]
-        let prediction = predictions.clone().slice([i..i + 1]);
+        let prediction = &predictions[i];
 
-        let class_indexes = prediction.argmax(2).into_data().convert::<i64>().value;
+        let class_indexes = prediction
+            .clone()
+            .argmax(1)
+            .into_data()
+            .convert::<i64>()
+            .value;
 
         let classes = class_indexes
             .into_iter()

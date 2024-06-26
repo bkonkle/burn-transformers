@@ -10,7 +10,7 @@ use burn::{
     tensor::{
         activation::softmax,
         backend::{AutodiffBackend, Backend},
-        Int, Tensor,
+        Bool, Int, Tensor,
     },
 };
 use derive_new::new;
@@ -19,7 +19,7 @@ use crate::{
     models::bert::token_classification::Config,
     pipelines::sequence_classification::{
         self,
-        token_classification::{self, Output},
+        token_classification::{self, output, Output},
     },
 };
 
@@ -39,7 +39,12 @@ pub struct Model<B: Backend> {
 /// Define model behavior
 impl<B: Backend> Model<B> {
     /// Defines forward pass for training
-    pub fn forward(&self, input: BertInferenceBatch<B>, targets: Tensor<B, 2, Int>) -> Output<B>
+    pub fn forward(
+        &self,
+        input: BertInferenceBatch<B>,
+        attention_mask: Tensor<B, 2, Bool>,
+        targets: Tensor<B, 2, Int>,
+    ) -> Output<B>
     where
         i64: std::convert::From<<B as burn::tensor::backend::Backend>::IntElem>,
     {
@@ -71,11 +76,16 @@ impl<B: Backend> Model<B> {
             loss,
             output,
             targets,
+            attention_mask,
         }
     }
 
     /// Defines forward pass for inference
-    pub fn infer(&self, input: BertInferenceBatch<B>) -> Tensor<B, 3> {
+    pub fn infer(
+        &self,
+        input: BertInferenceBatch<B>,
+        attention_mask: Tensor<B, 2, Bool>,
+    ) -> output::Inference<B> {
         let [batch_size, seq_length] = input.tokens.dims();
 
         let BertModelOutput { hidden_states, .. } = self.model.forward(input);
@@ -86,7 +96,10 @@ impl<B: Backend> Model<B> {
             .slice([0..batch_size, 0..seq_length])
             .reshape([batch_size, seq_length, self.n_classes]);
 
-        softmax(output, 2)
+        output::Inference {
+            output: softmax(output, 2),
+            attention_mask,
+        }
     }
 }
 
@@ -134,15 +147,19 @@ where
                 tokens: item.input.tokens,
                 mask_pad: item.input.mask_pad,
             },
+            item.input.attention_mask,
             item.targets,
         )
     }
 
     /// Defines forward pass for inference
-    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 3> {
-        self.infer(BertInferenceBatch {
-            tokens: input.tokens,
-            mask_pad: input.mask_pad,
-        })
+    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> output::Inference<B> {
+        self.infer(
+            BertInferenceBatch {
+                tokens: input.tokens,
+                mask_pad: input.mask_pad,
+            },
+            input.attention_mask,
+        )
     }
 }

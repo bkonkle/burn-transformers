@@ -20,6 +20,7 @@ where
                 tokens: item.input.tokens,
                 mask_pad: item.input.mask_pad,
             },
+            item.input.attention_mask,
             item.targets,
         );
         let grads = output.loss.backward();
@@ -40,6 +41,7 @@ where
                 tokens: item.input.tokens,
                 mask_pad: item.input.mask_pad,
             },
+            item.input.attention_mask,
             item.targets,
         )
     }

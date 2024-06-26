@@ -1,16 +1,12 @@
 use std::{fmt::Display, path::PathBuf};
 
-use burn::{
-    module::AutodiffModule,
-    tensor::{backend::AutodiffBackend, Tensor},
-    train::TrainStep,
-};
+use burn::{module::AutodiffModule, tensor::backend::AutodiffBackend, train::TrainStep};
 
 use crate::pipelines::sequence_classification;
 
 use super::{
     batcher::{self, Train},
-    Output,
+    output, Output,
 };
 
 /// A trait for models that can be used for Text Classification
@@ -26,7 +22,7 @@ where
     fn forward(&self, item: batcher::Train<B>) -> Output<B>;
 
     /// Defines forward pass for inference
-    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> Tensor<B, 3>;
+    fn infer(&self, input: sequence_classification::batcher::Infer<B>) -> output::Inference<B>;
 
     /// Load a model from a file
     fn load_from_safetensors(
