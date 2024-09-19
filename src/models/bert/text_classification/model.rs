@@ -112,10 +112,10 @@ where
         }
 
         // Initialize the linear output
-        let output = LinearConfig::new(config.model.hidden_size, n_classes).init(device);
+        let output = LinearConfig::new(config.hidden_size, n_classes).init(device);
 
         let record = ModelRecord {
-            model: BertModel::from_safetensors(model_file, device, config.model.clone()),
+            model: BertModel::from_safetensors(model_file, device, config.get_bert_config()),
             output: LinearRecord {
                 weight: output.weight,
                 bias: output.bias,
