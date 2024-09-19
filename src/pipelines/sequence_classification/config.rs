@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use burn::LearningRate;
 
+#[derive(Debug, Clone)]
 /// The common model configuration properties needed for the pipeline
 pub struct Config {
     /// The padding token ID
@@ -24,7 +25,7 @@ pub struct Config {
 }
 
 /// Define configuration struct for the experiment
-#[derive(burn::config::Config)]
+#[derive(Debug, burn::config::Config)]
 pub struct Training {
     /// Batch size
     #[config(default = 2)]
