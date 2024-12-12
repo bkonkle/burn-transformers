@@ -16,7 +16,7 @@ bert-burn = { git = "https://github.com/tracel-ai/models", package = "bert-burn"
     "safetensors",
     "tch-gpu",
 ] }
-candle-core = { version = "0.5" }
+candle-core = { version = "0.6" }
 csv = "1.3.0"
 derive-new = "0.6"
 futures = "0.3"
